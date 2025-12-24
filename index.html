@@ -312,19 +312,34 @@ const FormulaTreeVisualizer = _react.memo.call(void 0, ({ node, computedContext 
 const calculateSystem = (rows, buffs, activeBuffIds) => {
   const computed = {};
   const errors = {};
-  
+
   const activeModsByTarget = {};
+  const buffBreakdownByTarget = {}; // Track individual buff contributions
+
   buffs.forEach(buff => {
     if (activeBuffIds.has(buff.id)) {
       buff.mods.forEach(mod => {
         if (!activeModsByTarget[mod.targetVar]) {
           activeModsByTarget[mod.targetVar] = { mult: 0, flat: 0 };
         }
-        if (mod.type === 'mult') {
-          activeModsByTarget[mod.targetVar].mult += parseFloat(mod.value) || 0;
-        } else {
-          activeModsByTarget[mod.targetVar].flat += parseFloat(mod.value) || 0;
+        if (!buffBreakdownByTarget[mod.targetVar]) {
+          buffBreakdownByTarget[mod.targetVar] = [];
         }
+
+        const modValue = parseFloat(mod.value) || 0;
+        if (mod.type === 'mult') {
+          activeModsByTarget[mod.targetVar].mult += modValue;
+        } else {
+          activeModsByTarget[mod.targetVar].flat += modValue;
+        }
+
+        // Track individual buff contribution
+        buffBreakdownByTarget[mod.targetVar].push({
+          buffId: buff.id,
+          buffName: buff.name,
+          type: mod.type,
+          value: modValue
+        });
       });
     }
   });
@@ -373,7 +388,8 @@ const calculateSystem = (rows, buffs, activeBuffIds) => {
         tree: originalTree,
         displayTree: displayTree,
         value: value,
-        isBuffed: !!mods 
+        isBuffed: !!mods,
+        buffBreakdown: buffBreakdownByTarget[row.name] || []
       };
     } catch (e) {
       errors[row.id] = e.message;
@@ -1170,17 +1186,35 @@ const getInitialState = () => {
                                     )
                                 )
 
-                                /* Row Footer: Result & Status */
-                                , _react2.default.createElement('div', { className: "flex justify-between items-center text-xs pl-10"    ,}
+                                /* Row Footer: Result & Status with Buff Breakdown */
+                                , _react2.default.createElement('div', { className: "flex flex-wrap items-center gap-2 text-xs pl-10",}
                                     , isError ? (
-                                        _react2.default.createElement('span', { className: "text-red-500 flex items-center gap-1"   ,}, _react2.default.createElement(_lucidereact.AlertCircle, { size: 12,} ), " " , isError)
+                                        _react2.default.createElement('span', { className: "text-red-500 flex items-center gap-1",}, _react2.default.createElement(_lucidereact.AlertCircle, { size: 12,}), " ", isError)
                                     ) : (
-                                        _react2.default.createElement('div', { className: "flex items-center gap-2"  ,}
-                                            , _react2.default.createElement('span', { className: "text-slate-400 font-medium" ,}, "Result:")
+                                        _react2.default.createElement(_react2.default.Fragment, null
+                                            , _react2.default.createElement('span', { className: "text-slate-400 font-medium",}, "Result:")
                                             , _react2.default.createElement('span', { className: `font-mono px-2 py-0.5 rounded transition-colors ${isBuffed ? 'bg-amber-100 text-amber-700 font-bold' : 'bg-emerald-50 text-emerald-600 font-semibold'}`,}
                                                 , result !== undefined ? result.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'
                                             )
-                                            , isBuffed && _react2.default.createElement('span', { className: "text-[10px] text-amber-600 uppercase font-bold tracking-wide flex items-center gap-1"       ,}, _react2.default.createElement(_lucidereact.Zap, { size: 10, fill: "currentColor",} ), " Buffed" )
+                                            /* Inline Buff Breakdown - replaces "Buffed" text */
+                                            , _optionalChain([comp, 'optionalAccess', _28 => _28.buffBreakdown]) && comp.buffBreakdown.length > 0 && (
+                                                _react2.default.createElement(_react2.default.Fragment, null
+                                                    , _react2.default.createElement('span', { className: "text-amber-400 mx-0.5",}, "←")
+                                                    , comp.buffBreakdown.map((buff, idx) => (
+                                                        _react2.default.createElement('div', {
+                                                            key: `${buff.buffId}-${idx}`,
+                                                            className: "inline-flex items-center gap-1 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 text-[10px]",}
+                                                            , _react2.default.createElement(_lucidereact.Zap, { size: 8, className: "text-amber-500", fill: "currentColor",})
+                                                            , _react2.default.createElement('span', { className: "font-semibold text-amber-700",}, buff.buffName)
+                                                            , _react2.default.createElement('span', { className: `font-mono font-bold ${buff.value >= 0 ? 'text-emerald-600' : 'text-red-500'}`,}
+                                                                , buff.type === 'mult'
+                                                                    ? `${buff.value >= 0 ? '+' : ''}${(buff.value * 100).toFixed(0)}%`
+                                                                    : `${buff.value >= 0 ? '+' : ''}${buff.value.toLocaleString()}`
+                                                            )
+                                                        )
+                                                    ))
+                                                )
+                                            )
                                         )
                                     )
                                 )
@@ -1237,12 +1271,9 @@ const getInitialState = () => {
                         return (
                             _react2.default.createElement('div', {
                                 key: set.id,
-                                draggable: true,
-                                onDragStart: (e) => handleBuffSetDragStart(e, set.id),
                                 onDragOver: (e) => handleBuffSetDragOver(e, set.id),
                                 onDragLeave: handleBuffSetDragLeave,
                                 onDrop: (e) => handleBuffSetDrop(e, set.id),
-                                onDragEnd: handleBuffSetDragEnd,
                                 className: `group flex items-center justify-between gap-1 rounded-lg px-3 py-2 text-xs transition-all border-2 ${
                                     draggingBuffSetId === set.id ? 'opacity-50' : ''
                                 } ${
@@ -1259,7 +1290,11 @@ const getInitialState = () => {
                                 tabIndex: isCurrent ? undefined : 0,
                                 onKeyDown: (e) => !isCurrent && (e.key === 'Enter' || e.key === ' ') && loadBuffSet(set),}
                                 , _react2.default.createElement('div', {
+                                    draggable: true,
+                                    onDragStart: (e) => handleBuffSetDragStart(e, set.id),
+                                    onDragEnd: handleBuffSetDragEnd,
                                     className: "shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none mr-1"    ,
+                                    onClick: (e) => e.stopPropagation(),
                                     onMouseDown: (e) => e.stopPropagation(),}
                                     , _react2.default.createElement(_lucidereact.GripVertical, { size: 14,} )
                                 )
@@ -1335,12 +1370,9 @@ const getInitialState = () => {
               return (
                 _react2.default.createElement('div', {
                   key: buff.id,
-                  draggable: true,
-                  onDragStart: (e) => handleBuffDragStart(e, buff.id),
                   onDragOver: (e) => handleBuffDragOver(e, buff.id),
                   onDragLeave: handleBuffDragLeave,
                   onDrop: (e) => handleBuffDrop(e, buff.id),
-                  onDragEnd: handleBuffDragEnd,
                   className: `rounded-lg border transition-all ${
                     draggingBuffId === buff.id ? 'opacity-50' : ''
                   } ${
@@ -1348,6 +1380,9 @@ const getInitialState = () => {
                   } ${isActive ? 'bg-amber-50 border-amber-200 shadow-sm' : 'bg-white border-slate-200'}`,}
                   , _react2.default.createElement('div', { className: "p-3 flex items-center gap-3 border-b border-slate-100/50"     ,}
                     , _react2.default.createElement('div', {
+                        draggable: true,
+                        onDragStart: (e) => handleBuffDragStart(e, buff.id),
+                        onDragEnd: handleBuffDragEnd,
                         className: "shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"    ,}
                         , _react2.default.createElement(_lucidereact.GripVertical, { size: 16,} )
                     )
@@ -1381,7 +1416,7 @@ const getInitialState = () => {
                                     )
                                 )
                                 , preview && preview.delta === 0 && (
-                                    _react2.default.createElement('span', { className: "text-slate-400 italic" ,}, "No impact on "   , _optionalChain([activeRowObj, 'optionalAccess', _28 => _28.name]))
+                                    _react2.default.createElement('span', { className: "text-slate-400 italic" ,}, "No impact on "   , _optionalChain([activeRowObj, 'optionalAccess', _29 => _29.name]))
                                 )
                             )
                         )
@@ -1426,7 +1461,7 @@ const getInitialState = () => {
                 , _react2.default.createElement(_lucidereact.Eye, { size: 18,} ), " Visualization"
               )
               , _react2.default.createElement('div', { className: "text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100 flex items-center gap-2"           ,}, "Viewing: "
-                 , _react2.default.createElement('span', { className: "font-bold",}, _optionalChain([activeRowObj, 'optionalAccess', _29 => _29.name]) || 'Unknown')
+                 , _react2.default.createElement('span', { className: "font-bold",}, _optionalChain([activeRowObj, 'optionalAccess', _30 => _30.name]) || 'Unknown')
               )
             )
 
@@ -1447,12 +1482,12 @@ const getInitialState = () => {
                     , _react2.default.createElement('div', { className: "text-slate-400 text-sm font-medium mb-1"   ,}, "Final Result (Buffed)"  )
                     , _react2.default.createElement('div', { className: "text-4xl font-bold tracking-tight text-emerald-400 flex items-center gap-3"      ,}
                       , finalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                      , _optionalChain([mainResult, 'access', _30 => _30.computed, 'access', _31 => _31[_optionalChain([activeRowObj, 'optionalAccess', _32 => _32.name])], 'optionalAccess', _33 => _33.isBuffed]) && _react2.default.createElement('span', { className: "text-sm bg-amber-500/20 text-amber-400 px-2 py-1 rounded border border-amber-500/30 font-mono"        ,}, "BUFFS APPLIED" )
+                      , _optionalChain([mainResult, 'access', _31 => _31.computed, 'access', _32 => _32[_optionalChain([activeRowObj, 'optionalAccess', _33 => _33.name])], 'optionalAccess', _34 => _34.isBuffed]) && _react2.default.createElement('span', { className: "text-sm bg-amber-500/20 text-amber-400 px-2 py-1 rounded border border-amber-500/30 font-mono"        ,}, "BUFFS APPLIED" )
                     )
                   )
                   , _react2.default.createElement('div', { className: "text-right",}
                     , _react2.default.createElement('div', { className: "text-slate-500 text-xs uppercase tracking-wider font-bold mb-1"     ,}, "Target")
-                    , _react2.default.createElement('div', { className: "text-xl font-mono text-white"  ,}, _optionalChain([activeRowObj, 'optionalAccess', _34 => _34.name]))
+                    , _react2.default.createElement('div', { className: "text-xl font-mono text-white"  ,}, _optionalChain([activeRowObj, 'optionalAccess', _35 => _35.name]))
                   )
                 )
               )
@@ -1483,3 +1518,7 @@ const getInitialState = () => {
   
 
 <div id="preview-app"></div></body></html>
+
+
+
+
