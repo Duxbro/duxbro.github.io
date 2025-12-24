@@ -2,8 +2,125 @@
     <meta charset="utf-8">
     <title>Poe</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
-  <script src="https://puc.poecdn.net/authenticated_preview_page/disableWebRTC.9710cebe07429a9e8e06.js"></script><meta name="x-poe-allow-downloads" content="true"><meta name="x-poe-datastore-behavior" content="disabled"><script src="https://puc.poecdn.net/authenticated_preview_page/tw.b9024aecac666455e183.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/deps.faccd16000d314dc16d5.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/exports.b0f0f482cdeb5302b0b9.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/renderer.75c73ae6b4235f62945a.js"></script><script>Object.defineProperty(exports, "__esModule", {value: true}); function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }var _react = require('react'); var _react2 = _interopRequireDefault(_react);
+  <script src="https://puc.poecdn.net/authenticated_preview_page/disableWebRTC.9710cebe07429a9e8e06.js"></script><meta name="x-poe-allow-downloads" content="true"><meta name="x-poe-datastore-behavior" content="disabled"><script src="https://puc.poecdn.net/authenticated_preview_page/tw.b9024aecac666455e183.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/deps.faccd16000d314dc16d5.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/exports.b0f0f482cdeb5302b0b9.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/renderer.75c73ae6b4235f62945a.js"></script><script>Object.defineProperty(exports, "__esModule", {value: true}); function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }var _react = require('react'); var _react2 = _interopRequireDefault(_react);
 var _lucidereact = require('lucide-react');
+
+// --- 0. URL Sharing: Array-of-Arrays Encoding (keyless) ---
+
+// Structure definitions (index-based, no keys):
+// row: [id, name, expression]
+// mod: [id, targetVar, type, value]
+// buff: [id, name, mods[]]
+// buffSet: [id, name, activeIds[]]
+// state: [rows[], buffs[], buffSets[], activeBuffIds[], activeBuffSetId, activeTargetId]
+
+// Convert state object to compact array format
+const stateToArrays = (state) => {
+  // Convert rows: [{id, name, expression}] -> [[id, name, expression], ...]
+  const rows = state.rows.map(r => [r.id, r.name, r.expression]);
+
+  // Convert mods: [{id, targetVar, type, value}] -> [[id, targetVar, type, value], ...]
+  // Convert buffs: [{id, name, mods}] -> [[id, name, [[mod], ...]], ...]
+  const buffs = state.buffs.map(b => [
+    b.id,
+    b.name,
+    b.mods.map(m => [m.id, m.targetVar, m.type, m.value])
+  ]);
+
+  // Convert buffSets: [{id, name, activeIds}] -> [[id, name, [activeIds]], ...]
+  const buffSets = state.buffSets.map(s => [s.id, s.name, s.activeIds]);
+
+  // Return compact array: [rows, buffs, buffSets, activeBuffIds, activeBuffSetId, activeTargetId]
+  return [
+    rows,
+    buffs,
+    buffSets,
+    state.activeBuffIds,
+    state.activeBuffSetId,
+    state.activeTargetId
+  ];
+};
+
+// Convert compact array format back to state object
+const arraysToState = (arr) => {
+  if (!Array.isArray(arr) || arr.length < 6) return null;
+
+  const [rowsArr, buffsArr, buffSetsArr, activeBuffIds, activeBuffSetId, activeTargetId] = arr;
+
+  // Convert rows back: [[id, name, expression], ...] -> [{id, name, expression}, ...]
+  const rows = rowsArr.map(r => ({
+    id: r[0],
+    name: r[1],
+    expression: r[2]
+  }));
+
+  // Convert buffs back
+  const buffs = buffsArr.map(b => ({
+    id: b[0],
+    name: b[1],
+    mods: b[2].map(m => ({
+      id: m[0],
+      targetVar: m[1],
+      type: m[2],
+      value: m[3]
+    }))
+  }));
+
+  // Convert buffSets back
+  const buffSets = buffSetsArr.map(s => ({
+    id: s[0],
+    name: s[1],
+    activeIds: s[2]
+  }));
+
+  return {
+    rows,
+    buffs,
+    buffSets,
+    activeBuffIds,
+    activeBuffSetId,
+    activeTargetId
+  };
+};
+
+// Encode state to URL-safe string
+const encodeStateToUrl = (state) => {
+  try {
+    const compact = stateToArrays(state);
+    const json = JSON.stringify(compact);
+    return LZString.compressToEncodedURIComponent(json);
+  } catch (e) {
+    console.log('Failed to encode state:', e);
+    return null;
+  }
+};
+
+// Decode URL string back to state
+const decodeStateFromUrl = (encoded) => {
+  try {
+    const json = LZString.decompressFromEncodedURIComponent(encoded);
+    if (!json) return null;
+    const compact = JSON.parse(json);
+    return arraysToState(compact);
+  } catch (e) {
+    console.log('Failed to decode state:', e);
+    return null;
+  }
+};
+
+// Parse URL for shared data
+const getSharedStateFromUrl = () => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const data = params.get('d');
+    if (data) {
+      return decodeStateFromUrl(data);
+    }
+  } catch (e) {
+    console.log('Failed to parse URL:', e);
+  }
+  return null;
+};
 
 // --- 1. Tokenizer & Parser Logic ---
 
@@ -310,8 +427,24 @@ const saveToStorage = (data) => {
   }
 };
 
+// Check if URL has shared data (without loading it yet)
+const getPendingSharedState = () => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const data = params.get('d');
+    if (data) {
+      return decodeStateFromUrl(data);
+    }
+  } catch (e) {
+    console.log('Failed to parse URL:', e);
+  }
+  return null;
+};
+
 const getInitialState = () => {
+  // Only load from localStorage initially; URL state requires confirmation
   const saved = loadFromStorage();
+
   if (saved) {
     return {
       rows: saved.rows || [
@@ -381,6 +514,9 @@ const getInitialState = () => {
   const [isLoading, setIsLoading] = _react.useState.call(void 0, false);
   const [importError, setImportError] = _react.useState.call(void 0, null);
   const [isCalculatingHypotheticals, setIsCalculatingHypotheticals] = _react.useState.call(void 0, false);
+  const [shareStatus, setShareStatus] = _react.useState.call(void 0, null); // null, 'copying', 'copied', 'error'
+  const [pendingSharedState, setPendingSharedState] = _react.useState.call(void 0, () => getPendingSharedState());
+  const [showUrlBanner, setShowUrlBanner] = _react.useState.call(void 0, false);
   const fileInputRef = _react.useRef.call(void 0, null);
 
   // Drag and drop state
@@ -704,7 +840,7 @@ const getInitialState = () => {
         reader.onload = (event) => {
             try {
                 const data = JSON.parse(event.target.result);
-                
+
                 if (!data.rows || !Array.isArray(data.rows)) throw new Error("Invalid rows data");
                 if (!data.buffs || !Array.isArray(data.buffs)) throw new Error("Invalid buffs data");
 
@@ -731,6 +867,66 @@ const getInitialState = () => {
         };
         reader.readAsText(file);
     }, 100);
+  };
+
+  const handleShare = async () => {
+    setShareStatus('copying');
+    try {
+      const state = {
+        rows,
+        buffs,
+        buffSets,
+        activeBuffIds: Array.from(activeBuffIds),
+        activeBuffSetId,
+        activeTargetId
+      };
+      const encoded = encodeStateToUrl(state);
+      if (!encoded) {
+        throw new Error('Failed to encode state');
+      }
+
+      const baseUrl = window.location.origin + window.location.pathname;
+      const shareUrl = `${baseUrl}?d=${encoded}`;
+
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus('copied');
+      setTimeout(() => setShareStatus(null), 2500);
+    } catch (err) {
+      console.log('Share error:', err);
+      setShareStatus('error');
+      setTimeout(() => setShareStatus(null), 2500);
+    }
+  };
+
+  const handleConfirmSharedState = () => {
+    if (!pendingSharedState) return;
+
+    // Load the shared state
+    setRows(pendingSharedState.rows || rows);
+    setBuffs(pendingSharedState.buffs || buffs);
+    setBuffSets(pendingSharedState.buffSets || buffSets);
+    setActiveBuffIds(new Set(pendingSharedState.activeBuffIds || []));
+    setActiveBuffSetId(pendingSharedState.activeBuffSetId || null);
+
+    if (pendingSharedState.activeTargetId) {
+      setActiveTargetId(pendingSharedState.activeTargetId);
+    }
+
+    // Clear the pending state and show banner
+    setPendingSharedState(null);
+    setShowUrlBanner(true);
+
+    // Clear the URL parameter without reloading
+    const newUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+  };
+
+  const handleCancelSharedState = () => {
+    setPendingSharedState(null);
+
+    // Clear the URL parameter without reloading
+    const newUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
   };
 
 
@@ -773,6 +969,68 @@ const getInitialState = () => {
         )
       )
 
+      /* Shared Link Confirmation Modal */
+      , pendingSharedState && (
+        _react2.default.createElement('div', { className: "fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center",}
+            , _react2.default.createElement('div', { className: "bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4",}
+                , _react2.default.createElement('div', { className: "flex items-center gap-3 mb-4",}
+                    , _react2.default.createElement(_lucidereact.Share2, { className: "w-6 h-6 text-emerald-600",})
+                    , _react2.default.createElement('h3', { className: "text-lg font-bold text-slate-800",}, "Load Shared Configuration?")
+                )
+                , _react2.default.createElement('p', { className: "text-slate-600 text-sm mb-2",}
+                    , "Someone shared a Logic Chain configuration with you. Loading it will replace your current data."
+                )
+                , _react2.default.createElement('div', { className: "bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4",}
+                    , _react2.default.createElement('div', { className: "flex items-start gap-2",}
+                        , _react2.default.createElement(_lucidereact.AlertCircle, { className: "w-4 h-4 text-amber-600 mt-0.5 shrink-0",})
+                        , _react2.default.createElement('p', { className: "text-amber-800 text-xs",}
+                            , _react2.default.createElement('span', { className: "font-semibold",}, "Warning:")
+                            , " This will overwrite your locally saved configuration. Your current data will be lost."
+                        )
+                    )
+                )
+                , _react2.default.createElement('div', { className: "bg-slate-50 rounded-lg p-3 mb-4 text-xs text-slate-600",}
+                    , _react2.default.createElement('div', { className: "font-semibold text-slate-700 mb-1",}, "Shared configuration contains:")
+                    , _react2.default.createElement('ul', { className: "space-y-0.5",}
+                        , _react2.default.createElement('li', null, "• ", pendingSharedState.rows ? pendingSharedState.rows.length : 0, " calculation rows")
+                        , _react2.default.createElement('li', null, "• ", pendingSharedState.buffs ? pendingSharedState.buffs.length : 0, " buffs")
+                        , _react2.default.createElement('li', null, "• ", pendingSharedState.buffSets ? pendingSharedState.buffSets.length : 0, " buff sets")
+                    )
+                )
+                , _react2.default.createElement('div', { className: "flex gap-3",}
+                    , _react2.default.createElement('button', {
+                        onClick: handleCancelSharedState,
+                        className: "flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium",}
+                        , "Keep My Data"
+                    )
+                    , _react2.default.createElement('button', {
+                        onClick: handleConfirmSharedState,
+                        className: "flex-1 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium",}
+                        , "Load Shared"
+                    )
+                )
+            )
+        )
+      )
+
+      /* Shared Link Banner */
+      , showUrlBanner && (
+        _react2.default.createElement('div', { className: "mb-4 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center justify-between gap-3",}
+            , _react2.default.createElement('div', { className: "flex items-center gap-2",}
+                , _react2.default.createElement(_lucidereact.Share2, { className: "w-5 h-5 text-emerald-600 shrink-0",})
+                , _react2.default.createElement('span', { className: "text-sm text-emerald-800",}
+                    , _react2.default.createElement('span', { className: "font-semibold",}, "Shared configuration loaded!")
+                    , " You're viewing a shared Logic Chain. Any changes you make will be saved locally."
+                )
+            )
+            , _react2.default.createElement('button', {
+                onClick: () => setShowUrlBanner(false),
+                className: "text-emerald-600 hover:text-emerald-800 p-1 rounded hover:bg-emerald-100 transition-colors shrink-0",}
+                , _react2.default.createElement(_lucidereact.X, { size: 16,})
+            )
+        )
+      )
+
       , _react2.default.createElement('div', { className: "mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4"      ,}
         , _react2.default.createElement('div', null
           , _react2.default.createElement('h1', { className: "text-2xl font-bold text-slate-900 flex items-center gap-2"     ,}
@@ -785,14 +1043,30 @@ const getInitialState = () => {
         )
 
         , _react2.default.createElement('div', { className: "flex items-center gap-2"  ,}
-          , _react2.default.createElement('button', { 
+          , _react2.default.createElement('button', {
+            onClick: handleShare,
+            disabled: isLoading || shareStatus === 'copying',
+            className: `flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+              shareStatus === 'copied'
+                ? 'bg-emerald-500 border-emerald-500 text-white'
+                : shareStatus === 'error'
+                ? 'bg-red-500 border-red-500 text-white'
+                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-300'
+            }`,}
+            , shareStatus === 'copying' && _react2.default.createElement(_lucidereact.Loader2, { size: 16, className: "animate-spin",})
+            , shareStatus === 'copied' && _react2.default.createElement(_lucidereact.Check, { size: 16,})
+            , shareStatus === 'error' && _react2.default.createElement(_lucidereact.AlertCircle, { size: 16,})
+            , !shareStatus && _react2.default.createElement(_lucidereact.Share2, { size: 16,})
+            , shareStatus === 'copied' ? 'Copied!' : shareStatus === 'error' ? 'Failed' : 'Share'
+          )
+          , _react2.default.createElement('button', {
             onClick: handleExport,
             disabled: isLoading,
             className: "flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"                 ,}
 
             , _react2.default.createElement(_lucidereact.Download, { size: 16,} ), " Export JSON"
           )
-          , _react2.default.createElement('button', { 
+          , _react2.default.createElement('button', {
             onClick: handleImportClick,
             disabled: isLoading,
             className: "flex items-center gap-2 px-4 py-2 bg-indigo-600 border border-indigo-600 rounded-lg text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"                ,}
@@ -800,12 +1074,12 @@ const getInitialState = () => {
             , isLoading ? _react2.default.createElement(_lucidereact.Loader2, { size: 16, className: "animate-spin",} ) : _react2.default.createElement(_lucidereact.Upload, { size: 16,} ), "Import JSON"
 
           )
-          , _react2.default.createElement('input', { 
-            type: "file", 
-            ref: fileInputRef, 
-            onChange: handleFileChange, 
-            accept: ".json", 
-            className: "hidden",} 
+          , _react2.default.createElement('input', {
+            type: "file",
+            ref: fileInputRef,
+            onChange: handleFileChange,
+            accept: ".json",
+            className: "hidden",}
           )
         )
       )
