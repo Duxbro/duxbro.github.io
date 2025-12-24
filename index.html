@@ -811,7 +811,7 @@ const calculateSystem = (rows, buffs, activeBuffIds) => {
                   , _react2.default.createElement('table', { className: "w-full text-sm",}
                     , _react2.default.createElement('thead', null
                       , _react2.default.createElement('tr', { className: "bg-slate-50 border-b border-slate-200",}
-                        , _react2.default.createElement('th', { className: "text-left p-3 font-semibold text-slate-600 sticky left-0 bg-slate-50 z-10 min-w-[800px]",}, "Scenario")
+                        , _react2.default.createElement('th', { style: { "min-width" : "200px"} , className: "text-left p-3 font-semibold text-slate-600 sticky left-0 bg-slate-50 z-10 min-w-[140px]",}, "Scenario")
                         , buffs.map(buff => (
                           _react2.default.createElement('th', { key: buff.id, className: "text-center p-3 font-semibold text-slate-600 min-w-[80px]",}
                             , _react2.default.createElement('div', { className: "flex items-center justify-center gap-1",}
@@ -820,8 +820,8 @@ const calculateSystem = (rows, buffs, activeBuffIds) => {
                             )
                           )
                         ))
-                        , _react2.default.createElement('th', { className: "text-center p-3 font-semibold text-emerald-600 min-w-[100px] bg-emerald-50 sticky right-[80px] z-10",}, "Result")
-                        , _react2.default.createElement('th', { className: "text-center p-3 font-semibold text-slate-400 w-[80px] sticky right-0 z-10 bg-slate-50",}, "Actions")
+                        , _react2.default.createElement('th', { style: {right: "92px"} , className: "text-center p-3 font-semibold text-emerald-600 w-[100px] bg-slate-100 sticky right-[104px] z-10",}, "Result")
+                        , _react2.default.createElement('th', { className: "text-center p-3 font-semibold text-slate-400 w-[80px] bg-slate-50 sticky right-0 z-10",}, "Actions")
                       )
                     )
                     , _react2.default.createElement('tbody', null
@@ -861,7 +861,7 @@ const calculateSystem = (rows, buffs, activeBuffIds) => {
                               )
                             );
                           })
-                          , _react2.default.createElement('td', { className: `text-center p-3 sticky right-[80px] z-10 ${isSelected ? 'bg-emerald-50' : 'bg-emerald-50/50'}`,}
+                          , _react2.default.createElement('td', { style: {right: "92px"}, className: `text-center p-3 w-[100px] sticky right-[104px] z-10 ${delta == 0 ? 'bg-slate-50' : (delta > 0 ? 'bg-emerald-50' : 'bg-red-50')}`,}
                             , _react2.default.createElement('div', { className: "flex flex-col items-center",}
                               , _react2.default.createElement('span', { className: "font-bold text-slate-800",}
                                 , result ? result.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'
@@ -877,7 +877,7 @@ const calculateSystem = (rows, buffs, activeBuffIds) => {
                               )
                             )
                           )
-                          , _react2.default.createElement('td', { className: `text-center p-3 sticky right-0 z-10 ${isSelected ? 'bg-indigo-50' : 'bg-white'}`,}
+                          , _react2.default.createElement('td', { className: `text-center p-3 w-[80px] sticky right-0 z-10 ${isSelected ? 'bg-indigo-50' : 'bg-white'}`,}
                             , _react2.default.createElement('div', { className: "flex items-center justify-center gap-1",}
                               , _react2.default.createElement('button', {
                                 onClick: (e) => { e.stopPropagation(); setBaselineScenarioId(scenario.id); },
