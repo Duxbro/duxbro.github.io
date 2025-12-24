@@ -1054,8 +1054,9 @@ const calculateSystem = (rows, buffs, activeBuffIds) => {
       )
     )
   );
-} exports.default = UnifiedFormulaBuilder;
+} //exports.default = UnifiedFormulaBuilder;
 
 const rootElement = document.getElementById("preview-app");
 const root = ReactDOM.createRoot(rootElement);
 root.render(React.createElement(UnifiedFormulaBuilder));
+
