@@ -2,13 +2,16 @@ body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
-    background-color: #f5f5f5; /* Example background color */
+    background-color: #f0f0f0; /* Light background color */
 }
 
 #app {
-    max-width: 1200px;
+    max-width: 600px;
     margin: auto;
     padding: 20px;
+    text-align: center;
 }
 
-/* Additional styles can be added here */
+canvas {
+    border: 1px solid #ccc; /* Add a border to the canvas */
+}
