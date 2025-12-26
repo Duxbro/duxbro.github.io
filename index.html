@@ -2023,7 +2023,7 @@ const getInitialState = () => {
         , workspaces.length > 0 && _react2.default.createElement('div', { className: "p-3",}
             , _react2.default.createElement('div', { className: "flex flex-wrap gap-2"  ,}
                 , workspaces.map(workspace => {
-                    const savedDate = workspace.savedAt ? new Date(workspace.savedAt).toLocaleDateString() : '';
+                    const savedDateTime = workspace.savedAt ? new Date(workspace.savedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
                     const isConfirmingLoad = confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspace.id && confirmingWorkspaceAction.action === 'load';
                     const isConfirmingDelete = confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspace.id && confirmingWorkspaceAction.action === 'delete';
                     const isConfirmingSave = confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspace.id && confirmingWorkspaceAction.action === 'save';
@@ -2045,7 +2045,7 @@ const getInitialState = () => {
                             )
                             , _react2.default.createElement('div', { className: "flex items-center gap-1 text-[10px] text-slate-400"     ,}
                                 , _react2.default.createElement('span', null, workspace.rows ? workspace.rows.length : 0, " rows"  )
-                                , savedDate && _react2.default.createElement('span', null, "· ", savedDate)
+                                , savedDateTime && _react2.default.createElement('span', null, "· ", savedDateTime)
                             )
                         )
 
