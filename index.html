@@ -1,126 +1,9 @@
 <!DOCTYPE html><html><head><meta name="x-poe-datastore-behavior" content="local_only"><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;"><meta http-equiv="x-dns-prefetch-control" content="off"><script src="https://puc.poecdn.net/authenticated_preview_page/standard.3ef2c256959faf5a756d.js"></script>
     <meta charset="utf-8">
-    <title>Dynamic Variables Analysis</title>
+    <title>Poe</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://puc.poecdn.net/authenticated_preview_page/disableWebRTC.9710cebe07429a9e8e06.js"></script><meta name="x-poe-allow-downloads" content="true"><meta name="x-poe-datastore-behavior" content="disabled"><script src="https://puc.poecdn.net/authenticated_preview_page/tw.b9024aecac666455e183.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/deps.faccd16000d314dc16d5.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/exports.b0f0f482cdeb5302b0b9.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/renderer.75c73ae6b4235f62945a.js"></script><script>Object.defineProperty(exports, "__esModule", {value: true}); function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }var _react = require('react'); var _react2 = _interopRequireDefault(_react);
 var _lucidereact = require('lucide-react');
-
-// --- 0. URL Sharing: Array-of-Arrays Encoding (keyless) ---
-
-// Structure definitions (index-based, no keys):
-// row: [id, name, expression]
-// mod: [id, targetVar, type, value]
-// buff: [id, name, mods[]]
-// buffSet: [id, name, activeIds[]]
-// state: [rows[], buffs[], buffSets[], activeBuffIds[], activeBuffSetId, activeTargetId]
-
-// Convert state object to compact array format
-const stateToArrays = (state) => {
-  // Convert rows: [{id, name, expression}] -> [[id, name, expression], ...]
-  const rows = state.rows.map(r => [r.id, r.name, r.expression]);
-
-  // Convert mods: [{id, targetVar, type, value}] -> [[id, targetVar, type, value], ...]
-  // Convert buffs: [{id, name, mods}] -> [[id, name, [[mod], ...]], ...]
-  const buffs = state.buffs.map(b => [
-    b.id,
-    b.name,
-    b.mods.map(m => [m.id, m.targetVar, m.type, m.value])
-  ]);
-
-  // Convert buffSets: [{id, name, activeIds}] -> [[id, name, [activeIds]], ...]
-  const buffSets = state.buffSets.map(s => [s.id, s.name, s.activeIds]);
-
-  // Return compact array: [rows, buffs, buffSets, activeBuffIds, activeBuffSetId, activeTargetId]
-  return [
-    rows,
-    buffs,
-    buffSets,
-    state.activeBuffIds,
-    state.activeBuffSetId,
-    state.activeTargetId
-  ];
-};
-
-// Convert compact array format back to state object
-const arraysToState = (arr) => {
-  if (!Array.isArray(arr) || arr.length < 6) return null;
-
-  const [rowsArr, buffsArr, buffSetsArr, activeBuffIds, activeBuffSetId, activeTargetId] = arr;
-
-  // Convert rows back: [[id, name, expression], ...] -> [{id, name, expression}, ...]
-  const rows = rowsArr.map(r => ({
-    id: r[0],
-    name: r[1],
-    expression: r[2]
-  }));
-
-  // Convert buffs back
-  const buffs = buffsArr.map(b => ({
-    id: b[0],
-    name: b[1],
-    mods: b[2].map(m => ({
-      id: m[0],
-      targetVar: m[1],
-      type: m[2],
-      value: m[3]
-    }))
-  }));
-
-  // Convert buffSets back
-  const buffSets = buffSetsArr.map(s => ({
-    id: s[0],
-    name: s[1],
-    activeIds: s[2]
-  }));
-
-  return {
-    rows,
-    buffs,
-    buffSets,
-    activeBuffIds,
-    activeBuffSetId,
-    activeTargetId
-  };
-};
-
-// Encode state to URL-safe string
-const encodeStateToUrl = (state) => {
-  try {
-    const compact = stateToArrays(state);
-    const json = JSON.stringify(compact);
-    return LZString.compressToEncodedURIComponent(json);
-  } catch (e) {
-    console.log('Failed to encode state:', e);
-    return null;
-  }
-};
-
-// Decode URL string back to state
-const decodeStateFromUrl = (encoded) => {
-  try {
-    const json = LZString.decompressFromEncodedURIComponent(encoded);
-    if (!json) return null;
-    const compact = JSON.parse(json);
-    return arraysToState(compact);
-  } catch (e) {
-    console.log('Failed to decode state:', e);
-    return null;
-  }
-};
-
-// Parse URL for shared data
-const getSharedStateFromUrl = () => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const data = params.get('d');
-    if (data) {
-      return decodeStateFromUrl(data);
-    }
-  } catch (e) {
-    console.log('Failed to parse URL:', e);
-  }
-  return null;
-};
 
 // --- 1. Tokenizer & Parser Logic ---
 
@@ -164,10 +47,21 @@ const parse = (tokens, definedVars) => {
   };
 
   const parseMulDiv = () => {
-    let left = parsePrimary();
+    let left = parsePower();
     while (peek() === '*' || peek() === '/') {
       const op = consume();
-      const right = parsePrimary();
+      const right = parsePower();
+      left = new Node('operator', op, left, right);
+    }
+    return left;
+  };
+
+  // Power operator (^) - right associative, higher precedence than * /
+  const parsePower = () => {
+    let left = parsePrimary();
+    if (peek() === '^') {
+      const op = consume();
+      const right = parsePower(); // Right associative: 2^3^2 = 2^(3^2)
       left = new Node('operator', op, left, right);
     }
     return left;
@@ -215,7 +109,8 @@ const evaluateTree = (node, computedContext, depth = 0) => {
       case '+': return l + r;
       case '-': return l - r;
       case '*': return l * r;
-      case '/': return r === 0 ? 0 : l / r; 
+      case '/': return r === 0 ? 0 : l / r;
+      case '^': return Math.pow(l, r);
       default: return 0;
     }
   }
@@ -309,38 +204,57 @@ const FormulaTreeVisualizer = _react.memo.call(void 0, ({ node, computedContext 
 
 // --- 3. Core Calculation Engine ---
 
-const calculateSystem = (rows, buffs, activeBuffIds) => {
+const calculateSystem = (rows, buffs) => {
   const computed = {};
   const errors = {};
 
   const activeModsByTarget = {};
   const buffBreakdownByTarget = {}; // Track individual buff contributions
 
-  buffs.forEach(buff => {
-    if (activeBuffIds.has(buff.id)) {
-      buff.mods.forEach(mod => {
-        if (!activeModsByTarget[mod.targetVar]) {
-          activeModsByTarget[mod.targetVar] = { mult: 0, flat: 0 };
-        }
-        if (!buffBreakdownByTarget[mod.targetVar]) {
-          buffBreakdownByTarget[mod.targetVar] = [];
-        }
+  // Recursive function to apply mods from a buff and its active sub-buffs
+  // Now uses buff.isActive directly instead of looking up in sets
+  const applyBuffMods = (buff, namePath) => {
+    // Get the buff-level multiplier
+    const buffMultiplier = parseFloat(buff.multiply) || 1;
 
-        const modValue = parseFloat(mod.value) || 0;
-        if (mod.type === 'mult') {
-          activeModsByTarget[mod.targetVar].mult += modValue;
-        } else {
-          activeModsByTarget[mod.targetVar].flat += modValue;
-        }
+    // Apply this buff's mods
+    (buff.mods || []).forEach(mod => {
+      if (!activeModsByTarget[mod.targetVar]) {
+        activeModsByTarget[mod.targetVar] = { mult: 0, flat: 0 };
+      }
+      if (!buffBreakdownByTarget[mod.targetVar]) {
+        buffBreakdownByTarget[mod.targetVar] = [];
+      }
 
-        // Track individual buff contribution
-        buffBreakdownByTarget[mod.targetVar].push({
-          buffId: buff.id,
-          buffName: buff.name,
-          type: mod.type,
-          value: modValue
-        });
+      const modValue = (parseFloat(mod.value) || 0) * buffMultiplier;
+      if (mod.type === 'mult') {
+        activeModsByTarget[mod.targetVar].mult += modValue;
+      } else {
+        activeModsByTarget[mod.targetVar].flat += modValue;
+      }
+
+      // Track contribution with full path name
+      buffBreakdownByTarget[mod.targetVar].push({
+        buffName: namePath,
+        type: mod.type,
+        value: modValue,
+        multiply: buffMultiplier
       });
+    });
+
+    // Recursively apply active sub-buff mods (check isActive on each sub-buff)
+    (buff.subBuffs || []).forEach(subBuff => {
+      if (subBuff.isActive) {
+        const subNamePath = namePath + ' › ' + subBuff.name;
+        applyBuffMods(subBuff, subNamePath);
+      }
+    });
+  };
+
+  // Process all active top-level buffs (check isActive directly)
+  buffs.forEach(buff => {
+    if (buff.isActive) {
+      applyBuffMods(buff, buff.name);
     }
   });
 
@@ -443,18 +357,203 @@ const saveToStorage = (data) => {
   }
 };
 
-// Check if URL has shared data (without loading it yet)
-const getPendingSharedState = () => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const data = params.get('d');
-    if (data) {
-      return decodeStateFromUrl(data);
+// Helper to ensure buff has required properties with defaults (called after deepClone)
+const ensureBuffProperties = (buff) => ({
+  ...buff,
+  mods: buff.mods || [],
+  subBuffs: (buff.subBuffs || []).map(ensureBuffProperties),
+  presets: buff.presets || [],
+  multiply: buff.multiply || 1,
+  isActive: buff.isActive !== undefined ? buff.isActive : false,
+  isCollapsed: buff.isCollapsed !== undefined ? buff.isCollapsed : false
+});
+
+// Helper to collect all active buff IDs from a buff tree (for preset saving)
+const collectActiveIds = (buffs) => {
+  const ids = [];
+  const traverse = (buff) => {
+    if (buff.isActive) ids.push(buff.id);
+    (buff.subBuffs || []).forEach(traverse);
+  };
+  buffs.forEach(traverse);
+  return ids;
+};
+
+// Helper to apply active IDs to a buff tree (for preset loading)
+const applyActiveIds = (buffs, activeIds) => {
+  const activeSet = new Set(activeIds || []);
+  const traverse = (buff) => {
+    buff.isActive = activeSet.has(buff.id);
+    (buff.subBuffs || []).forEach(traverse);
+  };
+  buffs.forEach(traverse);
+};
+
+// Helper to collect multiply values from ACTIVE buffs in tree (for preset saving)
+// We only care about multiply values of active buffs since inactive ones don't affect calculations
+const collectMultiplyValuesFromTree = (buffs) => {
+  const values = {};
+  const traverse = (buff) => {
+    // Only collect multiply if this buff is active
+    if (buff.isActive && buff.multiply !== undefined && buff.multiply !== 1) {
+      values[buff.id] = buff.multiply;
     }
-  } catch (e) {
-    console.log('Failed to parse URL:', e);
+    (buff.subBuffs || []).forEach(traverse);
+  };
+  buffs.forEach(traverse);
+  return values;
+};
+
+// Helper to apply multiply values to buff tree (for preset loading)
+const applyMultiplyValuesToTree = (buffs, multiplyValues) => {
+  const values = multiplyValues || {};
+  const traverse = (buff) => {
+    buff.multiply = values[buff.id] !== undefined ? values[buff.id] : 1;
+    (buff.subBuffs || []).forEach(traverse);
+  };
+  buffs.forEach(traverse);
+};
+
+// Helper to migrate old format (v3) to new format (v5)
+const migrateOldFormat = (saved) => {
+  // Collect all active IDs from old format
+  const activeIds = new Set(saved.activeBuffIds || []);
+
+  // Add sub-buff active IDs
+  for (const ids of Object.values(saved.activeSubBuffIds || {})) {
+    (Array.isArray(ids) ? ids : [...ids]).forEach(id => activeIds.add(id));
   }
-  return null;
+
+  // Convert buffs with isActive/isCollapsed
+  const migrateBuffs = (buffs, collapsedIds) => {
+    return (buffs || []).map(b => ({
+      ...b,
+      subBuffs: migrateBuffs(b.subBuffs || [], collapsedIds),
+      presets: b.presets || [],
+      multiply: b.multiply || 1,
+      isActive: activeIds.has(b.id),
+      isCollapsed: collapsedIds.has(b.id)
+    }));
+  };
+
+  const collapsedIds = new Set(saved.collapsedBuffIds || []);
+  const topLevelBuffs = migrateBuffs(saved.buffs || [], collapsedIds);
+
+  // Convert old buffSets to new preset format
+  const migratePresets = (buffSets) => {
+    return (buffSets || []).map(set => {
+      // Collect all IDs from the old format
+      const presetActiveIds = [...(set.activeIds || [])];
+      for (const ids of Object.values(set.subBuffStates || {})) {
+        presetActiveIds.push(...ids);
+      }
+      return {
+        id: set.id,
+        name: set.name,
+        activeIds: presetActiveIds,
+        multiplyValues: set.multiplyValues || {}
+      };
+    });
+  };
+
+  return {
+    id: 'root',
+    name: 'Build',
+    mods: [],
+    multiply: 1,
+    subBuffs: topLevelBuffs,
+    presets: migratePresets(saved.buffSets)
+  };
+};
+
+// Deep clone helper using JSON serialization (safe since data is JSON-compatible)
+const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+
+// Shared function to parse import data (used by import, loadWorkspace, and getInitialState)
+// Returns { rows, activeTargetId, rootBuff } or throws an error
+// Deep clones all data to avoid reference issues with source
+const parseImportData = (data) => {
+  if (!data.rows || !Array.isArray(data.rows)) {
+    throw new Error("Invalid rows data");
+  }
+
+  // Deep clone entire input first to avoid any reference issues
+  const clonedData = deepClone(data);
+  let rootBuff;
+
+  // Check version to determine import format
+  if (clonedData.version >= 5 && clonedData.rootBuff) {
+    // Version 5+ format - isActive/isCollapsed stored in buff objects
+    rootBuff = {
+      id: clonedData.rootBuff.id || 'root',
+      name: clonedData.rootBuff.name || 'Build',
+      mods: clonedData.rootBuff.mods || [],
+      multiply: clonedData.rootBuff.multiply || 1,
+      subBuffs: (clonedData.rootBuff.subBuffs || []).map(ensureBuffProperties),
+      presets: clonedData.rootBuff.presets || []
+    };
+  } else if (clonedData.version >= 4 && clonedData.rootBuff) {
+    // Version 4 format - migrate activeSubBuffIds to isActive in buffs
+    const activeIds = new Set();
+    for (const ids of Object.values(clonedData.activeSubBuffIds || {})) {
+      (Array.isArray(ids) ? ids : [...ids]).forEach(id => activeIds.add(id));
+    }
+
+    const migrateBuffsV4 = (buffs) => {
+      return (buffs || []).map(b => ({
+        ...b,
+        subBuffs: migrateBuffsV4(b.subBuffs || []),
+        presets: b.presets || [],
+        multiply: b.multiply || 1,
+        isActive: activeIds.has(b.id),
+        isCollapsed: false
+      }));
+    };
+
+    rootBuff = {
+      id: clonedData.rootBuff.id || 'root',
+      name: clonedData.rootBuff.name || 'Build',
+      mods: clonedData.rootBuff.mods || [],
+      multiply: clonedData.rootBuff.multiply || 1,
+      subBuffs: migrateBuffsV4(clonedData.rootBuff.subBuffs || []),
+      presets: clonedData.rootBuff.presets || []
+    };
+  } else {
+    // Old format (version 3 or earlier) - requires full migration
+    if (!clonedData.buffs || !Array.isArray(clonedData.buffs)) {
+      throw new Error("Invalid buffs data");
+    }
+    rootBuff = migrateOldFormat(clonedData);
+  }
+
+  // Determine activeTargetId
+  let activeTargetId = clonedData.activeTargetId;
+  if (!activeTargetId || !clonedData.rows.find(r => r.id === activeTargetId)) {
+    activeTargetId = clonedData.rows.length > 0 ? clonedData.rows[clonedData.rows.length - 1].id : 'r3';
+  }
+
+  return {
+    rows: clonedData.rows,
+    activeTargetId,
+    rootBuff
+  };
+};
+
+// Helper to create export data format (used by export, saveAsWorkspace, and auto-save)
+// Deep clones all data to avoid reference issues
+const createExportData = (rows, rootBuff, activeTargetId, workspaces) => {
+  const data = {
+    version: 5,
+    rows: deepClone(rows),
+    rootBuff: deepClone(rootBuff),
+    activeTargetId
+  };
+  // Add workspaces only if there are any (optional field)
+  // Note: workspaces are not cloned here since they are already separate snapshots
+  if (workspaces && workspaces.length > 0) {
+    data.workspaces = workspaces;
+  }
+  return data;
 };
 
 const getInitialState = () => {
@@ -462,21 +561,30 @@ const getInitialState = () => {
   const saved = loadFromStorage();
 
   if (saved) {
-    return {
-      rows: saved.rows || [
-        { id: 'r1', name: 'Base', expression: '100' },
-        { id: 'r2', name: 'Bonus', expression: '50' },
-        { id: 'r3', name: 'Total', expression: '(Base + Bonus) * 2' },
-      ],
-      activeTargetId: saved.activeTargetId || 'r3',
-      buffs: saved.buffs || [
-        { id: 'b1', name: 'Heroism', mods: [{ id: 'm1', targetVar: 'Base', type: 'mult', value: 0.1 }] }
-      ],
-      activeBuffIds: new Set(saved.activeBuffIds || ['b1']),
-      buffSets: saved.buffSets || [{ id: 'bs1', name: 'Standard Raid', activeIds: ['b1'] }],
-      activeBuffSetId: saved.activeBuffSetId || 'bs1'
-    };
+    try {
+      const parsed = parseImportData(saved);
+      return {
+        ...parsed,
+        workspaces: saved.workspaces || []
+      };
+    } catch (e) {
+      console.log('Failed to parse saved state:', e);
+      // Fall through to default state
+    }
   }
+
+  // Default state - isActive and isCollapsed stored directly in buff objects
+  const defaultTopLevelBuffs = [
+    { id: 'b1', name: 'Heroism', mods: [{ id: 'm1', targetVar: 'Base', type: 'mult', value: 0.1 }], subBuffs: [], presets: [], multiply: 1, isActive: true, isCollapsed: false }
+  ];
+
+  const defaultRootPresets = [{
+    id: 'bs1',
+    name: 'Standard Raid',
+    activeIds: ['b1'],  // Flat array of active buff IDs
+    multiplyValues: {}
+  }];
+
   return {
     rows: [
       { id: 'r1', name: 'Base', expression: '100' },
@@ -484,12 +592,15 @@ const getInitialState = () => {
       { id: 'r3', name: 'Total', expression: '(Base + Bonus) * 2' },
     ],
     activeTargetId: 'r3',
-    buffs: [
-      { id: 'b1', name: 'Heroism', mods: [{ id: 'm1', targetVar: 'Base', type: 'mult', value: 0.1 }] }
-    ],
-    activeBuffIds: new Set(['b1']),
-    buffSets: [{ id: 'bs1', name: 'Standard Raid', activeIds: ['b1'] }],
-    activeBuffSetId: 'bs1'
+    rootBuff: {
+      id: 'root',
+      name: 'Build',
+      mods: [],
+      multiply: 1,
+      subBuffs: defaultTopLevelBuffs,
+      presets: defaultRootPresets
+    },
+    workspaces: []
   };
 };
 
@@ -497,49 +608,93 @@ const getInitialState = () => {
 
  function UnifiedFormulaBuilder() {
   // --- State ---
+  // Simplified: isActive and isCollapsed are stored directly in buff objects
   const initialState = _react.useMemo.call(void 0, () => getInitialState(), []);
 
   const [rows, setRows] = _react.useState.call(void 0, initialState.rows);
   const [activeTargetId, setActiveTargetId] = _react.useState.call(void 0, initialState.activeTargetId);
-  const [buffs, setBuffs] = _react.useState.call(void 0, initialState.buffs);
-  const [activeBuffIds, setActiveBuffIds] = _react.useState.call(void 0, initialState.activeBuffIds);
-  const [buffSets, setBuffSets] = _react.useState.call(void 0, initialState.buffSets);
-  const [activeBuffSetId, setActiveBuffSetId] = _react.useState.call(void 0, initialState.activeBuffSetId);
-  
-  const mainResult = _react.useMemo.call(void 0, () => {
-    return calculateSystem(rows, buffs, activeBuffIds);
-  }, [rows, buffs, activeBuffIds]);
+  const [rootBuff, setRootBuff] = _react.useState.call(void 0, initialState.rootBuff);
 
-  // Auto-save to localStorage when state changes
-  _react.useEffect.call(void 0, () => {
-    if (storageAvailable) {
-      saveToStorage({
-        rows,
-        buffs,
-        buffSets,
-        activeBuffIds: Array.from(activeBuffIds),
-        activeBuffSetId,
-        activeTargetId
+  // Derived: top-level buffs are root's subBuffs
+  const buffs = rootBuff.subBuffs;
+
+  // Helper to update rootBuff.subBuffs
+  const setBuffs = (newBuffs) => {
+    setRootBuff(prev => ({ ...prev, subBuffs: typeof newBuffs === 'function' ? newBuffs(prev.subBuffs) : newBuffs }));
+  };
+
+  // Helper to find and update a buff by ID anywhere in the tree
+  const updateBuffById = (buffId, updater) => {
+    const updateInTree = (buffs) => {
+      return buffs.map(buff => {
+        if (buff.id === buffId) {
+          return updater(buff);
+        }
+        if (buff.subBuffs && buff.subBuffs.length > 0) {
+          return { ...buff, subBuffs: updateInTree(buff.subBuffs) };
+        }
+        return buff;
       });
-    }
-  }, [rows, buffs, buffSets, activeBuffIds, activeBuffSetId, activeTargetId]);
+    };
+    setRootBuff(prev => ({ ...prev, subBuffs: updateInTree(prev.subBuffs) }));
+  };
+
+  // Toggle isActive for any buff by ID
+  const toggleBuffActive = (buffId) => {
+    updateBuffById(buffId, buff => ({ ...buff, isActive: !buff.isActive }));
+  };
+
+  // Toggle isCollapsed for any buff by ID
+  const toggleBuffCollapsed = (buffId) => {
+    updateBuffById(buffId, buff => ({ ...buff, isCollapsed: !buff.isCollapsed }));
+  };
+
+  const mainResult = _react.useMemo.call(void 0, () => {
+    return calculateSystem(rows, buffs);
+  }, [rows, buffs]);
 
   const [previews, setPreviews] = _react.useState.call(void 0, {});
-  // Renamed variable below to avoid collision
-  const [buffSetPreviews, setBuffSetPreviews] = _react.useState.call(void 0, {});
+  const [presetPreviews, setPresetPreviews] = _react.useState.call(void 0, {});
   const [isLoading, setIsLoading] = _react.useState.call(void 0, false);
   const [importError, setImportError] = _react.useState.call(void 0, null);
   const [isCalculatingHypotheticals, setIsCalculatingHypotheticals] = _react.useState.call(void 0, false);
-  const [shareStatus, setShareStatus] = _react.useState.call(void 0, null); // null, 'copying', 'copied', 'error'
-  const [pendingSharedState, setPendingSharedState] = _react.useState.call(void 0, () => getPendingSharedState());
-  const [showUrlBanner, setShowUrlBanner] = _react.useState.call(void 0, false);
   const fileInputRef = _react.useRef.call(void 0, null);
+
+  // Workspace state - loaded from main storage
+  const [workspaces, setWorkspaces] = _react.useState.call(void 0, initialState.workspaces);
+  const [confirmingWorkspaceAction, setConfirmingWorkspaceAction] = _react.useState.call(void 0, null); // { id, action: 'load' | 'delete' }
+
+  // Preset editing state - for root presets (Saved Builds)
+  // { id: string, originalSnapshot: { activeIds: [], multiplyValues: {} } } | null
+  const [editingPreset, setEditingPreset] = _react.useState.call(void 0, null);
+
+  // Auto-save to localStorage when state changes (including workspaces)
+  _react.useEffect.call(void 0, () => {
+    if (storageAvailable) {
+      saveToStorage(createExportData(rows, rootBuff, activeTargetId, workspaces));
+    }
+  }, [rows, rootBuff, activeTargetId, workspaces]);
 
   // Drag and drop state
   const [draggingBuffSetId, setDraggingBuffSetId] = _react.useState.call(void 0, null);
   const [draggingBuffId, setDraggingBuffId] = _react.useState.call(void 0, null);
   const [dragOverBuffSetId, setDragOverBuffSetId] = _react.useState.call(void 0, null);
   const [dragOverBuffId, setDragOverBuffId] = _react.useState.call(void 0, null);
+
+  // Variant drag and drop state (scoped to same parent)
+  // draggingVariant: { path: number[], parentPath: number[] } | null
+  const [draggingVariant, setDraggingVariant] = _react.useState.call(void 0, null);
+  const [dragOverVariantPath, setDragOverVariantPath] = _react.useState.call(void 0, null);
+
+  // Buff preset drag and drop state (scoped to same buff)
+  // draggingBuffPreset: { buffPath: number[], presetId: string } | null
+  const [draggingBuffPreset, setDraggingBuffPreset] = _react.useState.call(void 0, null);
+  const [dragOverBuffPresetKey, setDragOverBuffPresetKey] = _react.useState.call(void 0, null); // "path:presetId"
+
+  // Variant picker modal state
+  const [variantPickerState, setVariantPickerState] = _react.useState.call(void 0, null); // { path: number[] } | null
+  const [variantSearchQuery, setVariantSearchQuery] = _react.useState.call(void 0, '');
+  const variantSearchInputRef = _react.useRef.call(void 0, null);
 
   // --- Logic: Debounced Preview Calculation ---
   _react.useEffect.call(void 0, () => {
@@ -550,80 +705,234 @@ const getInitialState = () => {
             setIsCalculatingHypotheticals(false);
             return;
         }
-    
+
         const targetName = activeRow.name;
         const currentTargetValue = _optionalChain([mainResult, 'access', _6 => _6.computed, 'access', _7 => _7[targetName], 'optionalAccess', _8 => _8.value]) || 0;
-        
+
+        // Helper: deep clone buffs and toggle isActive for a specific buff ID
+        const cloneWithToggle = (buffs, toggleId, forceActive = null) => {
+          return buffs.map(buff => {
+            const newBuff = { ...buff };
+            if (buff.id === toggleId) {
+              newBuff.isActive = forceActive !== null ? forceActive : !buff.isActive;
+            }
+            if (buff.subBuffs && buff.subBuffs.length > 0) {
+              newBuff.subBuffs = cloneWithToggle(buff.subBuffs, toggleId, forceActive);
+            }
+            return newBuff;
+          });
+        };
+
+        // Helper: deep clone buffs and apply preset's activeIds and multiplyValues to ALL buffs
+        // Used for root presets (saved builds) that affect the entire tree
+        const cloneWithPreset = (buffs, activeIds, multiplyValues = {}) => {
+          const activeSet = new Set(activeIds || []);
+          const cloneTree = (buff) => {
+            const newBuff = { ...buff };
+            newBuff.isActive = activeSet.has(buff.id);
+            newBuff.multiply = multiplyValues[buff.id] !== undefined ? multiplyValues[buff.id] : 1;
+            if (buff.subBuffs && buff.subBuffs.length > 0) {
+              newBuff.subBuffs = buff.subBuffs.map(cloneTree);
+            }
+            return newBuff;
+          };
+          return buffs.map(cloneTree);
+        };
+
+        // Helper: deep clone buffs and apply preset only to a specific buff's descendants
+        // Used for buff-level presets that only affect that buff's variants
+        const cloneWithBuffPreset = (buffs, targetBuffId, activeIds, multiplyValues = {}) => {
+          const activeSet = new Set(activeIds || []);
+          const cloneTree = (buff, isInsideTarget) => {
+            const newBuff = { ...buff };
+            const isTarget = buff.id === targetBuffId;
+
+            if (isInsideTarget) {
+              // We're inside the target buff's subtree - apply preset values
+              newBuff.isActive = activeSet.has(buff.id);
+              newBuff.multiply = multiplyValues[buff.id] !== undefined ? multiplyValues[buff.id] : 1;
+            }
+            // Otherwise keep existing values
+
+            if (buff.subBuffs && buff.subBuffs.length > 0) {
+              // If this is the target buff, start applying preset to its descendants
+              newBuff.subBuffs = buff.subBuffs.map(sb => cloneTree(sb, isInsideTarget || isTarget));
+            }
+            return newBuff;
+          };
+          return buffs.map(b => cloneTree(b, false));
+        };
+
+        // Helper: check if preset matches current state
+        const isPresetCurrent = (preset) => {
+          const presetActiveIds = new Set(preset.activeIds || []);
+          const currentActiveIds = new Set(collectActiveIds(buffs));
+          if (presetActiveIds.size !== currentActiveIds.size) return false;
+          for (const id of presetActiveIds) {
+            if (!currentActiveIds.has(id)) return false;
+          }
+          // Also check multiply values
+          const currentMultiply = collectMultiplyValuesFromTree(buffs);
+          const presetMultiply = preset.multiplyValues || {};
+          const allKeys = new Set([...Object.keys(currentMultiply), ...Object.keys(presetMultiply)]);
+          for (const key of allKeys) {
+            if ((currentMultiply[key] || 1) !== (presetMultiply[key] || 1)) return false;
+          }
+          return true;
+        };
+
         // 1. Calculate Individual Buff Deltas
         const newPreviews = {};
-        buffs.forEach(buff => {
-            const hypotheticalIds = new Set(activeBuffIds);
-            
-            if (hypotheticalIds.has(buff.id)) {
-                hypotheticalIds.delete(buff.id);
-            } else {
-                hypotheticalIds.add(buff.id);
-            }
-            
-            const hypoResult = calculateSystem(rows, buffs, hypotheticalIds);
+
+        const calculateBuffPreviews = (buffList, parentActive = true) => {
+          buffList.forEach(buff => {
+            const isActive = buff.isActive && parentActive;
+
+            // Create hypothetical by toggling this buff
+            const hypoBuffs = cloneWithToggle(buffs, buff.id);
+            const hypoResult = calculateSystem(rows, hypoBuffs);
             const hypoValue = _optionalChain([hypoResult, 'access', _9 => _9.computed, 'access', _10 => _10[targetName], 'optionalAccess', _11 => _11.value]) || 0;
+
+            const delta = isActive
+              ? (currentTargetValue - hypoValue)
+              : (hypoValue - currentTargetValue);
+
+            let percent = 0;
+            const baseValue = isActive ? hypoValue : currentTargetValue;
+            if (baseValue !== 0) {
+              percent = (delta / Math.abs(baseValue)) * 100;
+            } else if (delta !== 0) {
+              percent = delta > 0 ? 100 : -100;
+            }
+
+            newPreviews[buff.id] = {
+              value: hypoValue,
+              delta,
+              percent,
+              isActive
+            };
+
+            // Recursively calculate for sub-buffs
+            if (buff.subBuffs && buff.subBuffs.length > 0) {
+              calculateBuffPreviews(buff.subBuffs, isActive);
+            }
+          });
+        };
+
+        calculateBuffPreviews(buffs);
+
+        // 2. Calculate Preset Deltas (for individual buff presets)
+        const newPresetPreviews = {};
+
+        // Helper to check if a buff-level preset matches current state (descendants only)
+        const isBuffPresetCurrent = (buff, preset) => {
+          // Collect active IDs from buff's descendants only
+          const collectFromDescendants = (b) => {
+            const ids = [];
+            const traverse = (sb) => {
+              if (sb.isActive) ids.push(sb.id);
+              (sb.subBuffs || []).forEach(traverse);
+            };
+            (b.subBuffs || []).forEach(traverse);
+            return ids;
+          };
+
+          const currentActiveIds = new Set(collectFromDescendants(buff));
+          const presetActiveIds = new Set(preset.activeIds || []);
+
+          if (currentActiveIds.size !== presetActiveIds.size) return false;
+          for (const id of currentActiveIds) {
+            if (!presetActiveIds.has(id)) return false;
+          }
+
+          // Also check multiply values (only for ACTIVE descendants)
+          // Multiply values of inactive variants don't affect calculations, so we ignore them
+          const collectMultiplyFromDescendants = (b) => {
+            const values = {};
+            const traverse = (sb) => {
+              // Only collect multiply if this buff is active
+              if (sb.isActive && sb.multiply !== undefined && sb.multiply !== 1) {
+                values[sb.id] = sb.multiply;
+              }
+              (sb.subBuffs || []).forEach(traverse);
+            };
+            (b.subBuffs || []).forEach(traverse);
+            return values;
+          };
+
+          const currentMultiply = collectMultiplyFromDescendants(buff);
+          const presetMultiply = preset.multiplyValues || {};
+          const allKeys = new Set([...Object.keys(currentMultiply), ...Object.keys(presetMultiply)]);
+          for (const key of allKeys) {
+            if ((currentMultiply[key] || 1) !== (presetMultiply[key] || 1)) return false;
+          }
+          return true;
+        };
+
+        const calculatePresetPreviews = (buffList) => {
+          buffList.forEach(buff => {
+            (buff.presets || []).forEach(preset => {
+              const presetKey = `${buff.id}:preset:${preset.id}`;
+
+              if (isBuffPresetCurrent(buff, preset)) {
+                newPresetPreviews[presetKey] = { percent: 0, isCurrent: true };
+              } else {
+                // Use cloneWithBuffPreset to only affect this buff's descendants
+                const hypoBuffs = cloneWithBuffPreset(buffs, buff.id, preset.activeIds, preset.multiplyValues);
+                const hypoResult = calculateSystem(rows, hypoBuffs);
+                const hypoValue = _optionalChain([hypoResult, 'access', _12 => _12.computed, 'access', _13 => _13[targetName], 'optionalAccess', _14 => _14.value]) || 0;
+                const delta = hypoValue - currentTargetValue;
+
+                let percent = 0;
+                if (currentTargetValue !== 0) {
+                  percent = (delta / Math.abs(currentTargetValue)) * 100;
+                } else if (delta !== 0) {
+                  percent = delta > 0 ? 100 : -100;
+                }
+
+                newPresetPreviews[presetKey] = { percent, isCurrent: false };
+              }
+            });
+
+            // Recursively process sub-buff presets
+            if (buff.subBuffs && buff.subBuffs.length > 0) {
+              calculatePresetPreviews(buff.subBuffs);
+            }
+          });
+        };
+
+        calculatePresetPreviews(buffs);
+
+        // 3. Calculate Root Presets (Saved Builds)
+        (rootBuff.presets || []).forEach(preset => {
+          const presetKey = `root:preset:${preset.id}`;
+
+          if (isPresetCurrent(preset)) {
+            newPresetPreviews[presetKey] = { percent: 0, isCurrent: true };
+          } else {
+            const hypoBuffs = cloneWithPreset(buffs, preset.activeIds, preset.multiplyValues);
+            const hypoResult = calculateSystem(rows, hypoBuffs);
+            const hypoValue = _optionalChain([hypoResult, 'access', _15 => _15.computed, 'access', _16 => _16[targetName], 'optionalAccess', _17 => _17.value]) || 0;
             const delta = hypoValue - currentTargetValue;
-            
+
             let percent = 0;
             if (currentTargetValue !== 0) {
               percent = (delta / Math.abs(currentTargetValue)) * 100;
             } else if (delta !== 0) {
-                percent = delta > 0 ? 100 : -100;
+              percent = delta > 0 ? 100 : -100;
             }
-    
-            newPreviews[buff.id] = {
-              value: hypoValue,
-              delta: delta,
-              percent: percent
-            };
+
+            newPresetPreviews[presetKey] = { percent, isCurrent: false };
+          }
         });
 
-        // 2. Calculate Buff Set Deltas
-        const newSetPreviews = {};
-        buffSets.forEach(set => {
-            // Skip calculation if the set is exactly the same as current
-            const setIds = new Set(set.activeIds);
-            
-            // Basic set equality check
-            let isSame = setIds.size === activeBuffIds.size;
-            if (isSame) {
-                for (let a of setIds) if (!activeBuffIds.has(a)) { isSame = false; break; }
-            }
-
-            if (isSame) {
-                 newSetPreviews[set.id] = { delta: 0, percent: 0, isCurrent: true };
-            } else {
-                const hypoResult = calculateSystem(rows, buffs, setIds);
-                const hypoValue = _optionalChain([hypoResult, 'access', _12 => _12.computed, 'access', _13 => _13[targetName], 'optionalAccess', _14 => _14.value]) || 0;
-                const delta = hypoValue - currentTargetValue;
-                
-                let percent = 0;
-                if (currentTargetValue !== 0) {
-                    percent = (delta / Math.abs(currentTargetValue)) * 100;
-                } else if (delta !== 0) {
-                    percent = delta > 0 ? 100 : -100;
-                }
-
-                newSetPreviews[set.id] = {
-                    delta: delta,
-                    percent: percent,
-                    isCurrent: false
-                };
-            }
-        });
-        
         setPreviews(newPreviews);
-        setBuffSetPreviews(newSetPreviews);
+        setPresetPreviews(newPresetPreviews);
         setIsCalculatingHypotheticals(false);
-    }, 300); 
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [rows, buffs, activeBuffIds, activeTargetId, mainResult, buffSets]);
+  }, [rows, buffs, rootBuff, activeTargetId, mainResult]);
 
   // --- Handlers ---
 
@@ -652,16 +961,9 @@ const getInitialState = () => {
     setRows(newRows);
   };
 
-  const toggleBuff = (id) => {
-    const newSet = new Set(activeBuffIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setActiveBuffIds(newSet);
-  };
-
   const addBuff = () => {
     const id = Math.random().toString(36).substr(2, 9);
-    setBuffs([...buffs, { id, name: 'New Buff', mods: [] }]);
+    setBuffs([...buffs, { id, name: 'New Buff', mods: [], subBuffs: [], presets: [], multiply: 1, isActive: false, isCollapsed: false }]);
   };
 
   const removeBuff = (index) => {
@@ -670,110 +972,553 @@ const getInitialState = () => {
     setBuffs(newBuffs);
   };
 
-  const updateBuffName = (index, val) => {
-    const newBuffs = [...buffs];
-    newBuffs[index].name = val;
-    setBuffs(newBuffs);
-  };
+  // --- Root Buff Preset Handlers (formerly Buff Set Handlers) ---
 
-  const addModToBuff = (buffIndex) => {
-    const newBuffs = [...buffs];
-    const target = rows.length > 0 ? rows[0].name : '';
-    newBuffs[buffIndex].mods.push({
-      id: Math.random().toString(36).substr(2, 9),
-      targetVar: target,
-      type: 'mult',
-      value: 0.1
-    });
-    setBuffs(newBuffs);
-  };
-
-  const updateMod = (buffIndex, modIndex, field, val) => {
-    const newBuffs = [...buffs];
-    newBuffs[buffIndex].mods[modIndex][field] = val;
-    setBuffs(newBuffs);
-  };
-
-  const removeMod = (buffIndex, modIndex) => {
-    const newBuffs = [...buffs];
-    newBuffs[buffIndex].mods.splice(modIndex, 1);
-    setBuffs(newBuffs);
-  };
-
-  // --- Buff Set Handlers ---
-
-  const createBuffSet = () => {
-      const newSetId = Math.random().toString(36).substr(2, 9);
-      const newSet = {
-          id: newSetId,
-          name: 'New Set',
-          activeIds: Array.from(activeBuffIds)
-      };
-      setBuffSets([...buffSets, newSet]);
-      setActiveBuffSetId(newSetId);
-  };
-
-  const updateBuffSet = (setId) => {
-    setBuffSets(buffSets.map(set => {
-        if (set.id === setId) {
-            return { ...set, activeIds: Array.from(activeBuffIds) };
-        }
-        return set;
+  // Create a new root preset (formerly buff set)
+  // New simplified format: activeIds is flat array of all active buff IDs, multiplyValues keyed by buff ID
+  const createRootPreset = () => {
+    // Exit edit mode if active (discards changes)
+    if (editingPreset) {
+      discardPresetEdit();
+    }
+    const newPresetId = Math.random().toString(36).substr(2, 9);
+    const newPreset = {
+      id: newPresetId,
+      name: 'New Build',
+      activeIds: collectActiveIds(buffs),
+      multiplyValues: collectMultiplyValuesFromTree(buffs)
+    };
+    setRootBuff(prev => ({
+      ...prev,
+      presets: [...(prev.presets || []), newPreset]
     }));
   };
 
-  const loadBuffSet = (set) => {
-      setActiveBuffIds(new Set(set.activeIds));
-      setActiveBuffSetId(set.id);
+  // Load/apply a root preset (internal use - does not exit edit mode)
+  const loadRootPreset = (preset) => {
+    // Clone buffs, apply activeIds and multiplyValues
+    const newBuffs = deepClone(buffs);
+    applyActiveIds(newBuffs, preset.activeIds);
+    applyMultiplyValuesToTree(newBuffs, preset.multiplyValues);
+    setBuffs(newBuffs);
   };
 
-  const deleteBuffSet = (id) => {
-      setBuffSets(buffSets.filter(s => s.id !== id));
-      if (activeBuffSetId === id) {
-          setActiveBuffSetId(null);
+  // Handle clicking a root preset in UI - exits edit mode first
+  const handleRootPresetClick = (preset) => {
+    // Exit edit mode if active (discards changes)
+    if (editingPreset) {
+      discardPresetEdit();
+    }
+    loadRootPreset(preset);
+  };
+
+  // Delete a root preset
+  const deleteRootPreset = (id) => {
+    // If deleting the preset being edited, just exit edit mode
+    if (editingPreset && editingPreset.id === id) {
+      setEditingPreset(null);
+    }
+    setRootBuff(prev => ({
+      ...prev,
+      presets: (prev.presets || []).filter(p => p.id !== id)
+    }));
+  };
+
+  // Rename a root preset
+  const updateRootPresetName = (presetId, newName) => {
+    setRootBuff(prev => ({
+      ...prev,
+      presets: (prev.presets || []).map(preset =>
+        preset.id === presetId ? { ...preset, name: newName } : preset
+      )
+    }));
+  };
+
+  // --- Root Preset Edit Mode ---
+
+  // Start editing a root preset - captures current state as original snapshot
+  const startEditingRootPreset = (preset) => {
+    // First apply the preset to ensure we're starting from its state
+    loadRootPreset(preset);
+    // Then enter edit mode with the original snapshot
+    setEditingPreset({
+      id: preset.id,
+      originalSnapshot: {
+        activeIds: [...(preset.activeIds || [])],
+        multiplyValues: { ...(preset.multiplyValues || {}) }
       }
+    });
   };
 
-  // --- Drag and Drop Handlers for Buff Sets ---
-  const handleBuffSetDragStart = (e, setId) => {
-    setDraggingBuffSetId(setId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', setId);
+  // Discard changes and exit edit mode - re-applies original snapshot
+  const discardPresetEdit = () => {
+    if (!editingPreset) return;
+    // Re-apply the original snapshot
+    const newBuffs = deepClone(buffs);
+    applyActiveIds(newBuffs, editingPreset.originalSnapshot.activeIds);
+    applyMultiplyValuesToTree(newBuffs, editingPreset.originalSnapshot.multiplyValues);
+    setBuffs(newBuffs);
+    setEditingPreset(null);
   };
 
-  const handleBuffSetDragOver = (e, setId) => {
-    e.preventDefault();
-    if (draggingBuffSetId && draggingBuffSetId !== setId) {
-      setDragOverBuffSetId(setId);
+  // Save changes to the preset and exit edit mode
+  const savePresetEdit = () => {
+    if (!editingPreset) return;
+    const presetId = editingPreset.id;
+
+    // Collect current state
+    const newActiveIds = collectActiveIds(buffs);
+    const newMultiplyValues = collectMultiplyValuesFromTree(buffs);
+
+    // Update preset in-place with new values
+    setRootBuff(prev => ({
+      ...prev,
+      presets: (prev.presets || []).map(p =>
+        p.id === presetId
+          ? { ...p, activeIds: newActiveIds, multiplyValues: newMultiplyValues }
+          : p
+      )
+    }));
+
+    setEditingPreset(null);
+  };
+
+  // Helper to exit edit mode before certain actions (discard changes)
+  const ensureNotEditingPreset = () => {
+    if (editingPreset) {
+      discardPresetEdit();
     }
   };
 
-  const handleBuffSetDragLeave = () => {
+  // --- Drag and Drop Handlers for Root Presets ---
+  const handleRootPresetDragStart = (e, presetId) => {
+    setDraggingBuffSetId(presetId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', presetId);
+  };
+
+  const handleRootPresetDragOver = (e, presetId) => {
+    e.preventDefault();
+    if (draggingBuffSetId && draggingBuffSetId !== presetId) {
+      setDragOverBuffSetId(presetId);
+    }
+  };
+
+  const handleRootPresetDragLeave = () => {
     setDragOverBuffSetId(null);
   };
 
-  const handleBuffSetDrop = (e, targetId) => {
+  const handleRootPresetDrop = (e, targetId) => {
     e.preventDefault();
     if (!draggingBuffSetId || draggingBuffSetId === targetId) {
       setDraggingBuffSetId(null);
       setDragOverBuffSetId(null);
       return;
     }
-    const fromIndex = buffSets.findIndex(s => s.id === draggingBuffSetId);
-    const toIndex = buffSets.findIndex(s => s.id === targetId);
+    const presets = rootBuff.presets || [];
+    const fromIndex = presets.findIndex(p => p.id === draggingBuffSetId);
+    const toIndex = presets.findIndex(p => p.id === targetId);
     if (fromIndex !== -1 && toIndex !== -1) {
-      const newSets = [...buffSets];
-      const [moved] = newSets.splice(fromIndex, 1);
-      newSets.splice(toIndex, 0, moved);
-      setBuffSets(newSets);
+      const newPresets = [...presets];
+      const [moved] = newPresets.splice(fromIndex, 1);
+      newPresets.splice(toIndex, 0, moved);
+      setRootBuff(prev => ({ ...prev, presets: newPresets }));
     }
     setDraggingBuffSetId(null);
     setDragOverBuffSetId(null);
   };
 
-  const handleBuffSetDragEnd = () => {
+  const handleRootPresetDragEnd = () => {
     setDraggingBuffSetId(null);
     setDragOverBuffSetId(null);
+  };
+
+  // --- Workspace Handlers ---
+
+  // Save current state as a new workspace (reuses createExportData format)
+  const saveAsWorkspace = () => {
+    const workspaceId = Math.random().toString(36).substr(2, 9);
+    const workspaceName = 'Workspace ' + (workspaces.length + 1);
+
+    // Create workspace data using shared export format (without workspaces field)
+    const workspaceData = {
+      ...createExportData(rows, rootBuff, activeTargetId, null),
+      id: workspaceId,
+      name: workspaceName,
+      savedAt: Date.now()
+    };
+
+    // Just update state - auto-save effect will persist to storage
+    setWorkspaces([...workspaces, workspaceData]);
+  };
+
+  // Load a workspace (reuses parseImportData)
+  const loadWorkspace = (workspace) => {
+    // Exit edit mode if active (discards changes)
+    if (editingPreset) {
+      setEditingPreset(null); // Just clear, don't re-apply since we're loading new state anyway
+    }
+    setIsLoading(true);
+    setTimeout(() => {
+      try {
+        const parsed = parseImportData(workspace);
+        setRows(parsed.rows);
+        setRootBuff(parsed.rootBuff);
+        setActiveTargetId(parsed.activeTargetId);
+      } catch (err) {
+        setImportError("Failed to load workspace: " + err.message);
+      } finally {
+        setTimeout(() => setIsLoading(false), 300);
+      }
+    }, 100);
+  };
+
+  // Update workspace name (called on input change)
+  const updateWorkspaceName = (workspaceId, newName) => {
+    // Just update state - auto-save effect will persist to storage
+    setWorkspaces(workspaces.map(ws =>
+      ws.id === workspaceId ? { ...ws, name: newName } : ws
+    ));
+  };
+
+  // Delete a workspace
+  const deleteWorkspace = (workspaceId) => {
+    // Just update state - auto-save effect will persist to storage
+    setWorkspaces(workspaces.filter(ws => ws.id !== workspaceId));
+    setConfirmingWorkspaceAction(null);
+  };
+
+  // Handle workspace action click (load/delete) with confirmation
+  const handleWorkspaceActionClick = (workspaceId, action) => {
+    // If already confirming this action, execute it
+    if (confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspaceId && confirmingWorkspaceAction.action === action) {
+      if (action === 'load') {
+        const workspace = workspaces.find(ws => ws.id === workspaceId);
+        if (workspace) {
+          loadWorkspace(workspace);
+        }
+      } else if (action === 'delete') {
+        deleteWorkspace(workspaceId);
+      }
+      setConfirmingWorkspaceAction(null);
+    } else {
+      // Start confirming this action
+      setConfirmingWorkspaceAction({ id: workspaceId, action });
+    }
+  };
+
+  // Cancel workspace action confirmation
+  const cancelWorkspaceActionConfirm = () => {
+    setConfirmingWorkspaceAction(null);
+  };
+
+  // --- Path-based Helpers for Infinite Nesting ---
+  // Path is an array of indices: [buffIndex] for top-level, [buffIndex, subIndex, subSubIndex, ...] for nested
+
+  // Get a buff node at a given path
+  const getBuffAtPath = (path) => {
+    if (path.length === 0) return null;
+    let node = buffs[path[0]];
+    for (let i = 1; i < path.length; i++) {
+      if (!node || !node.subBuffs) return null;
+      node = node.subBuffs[path[i]];
+    }
+    return node;
+  };
+
+  // Check if a preset matches the current state (including multiply values)
+  // A preset saves variant selections WITHIN a buff, so we compare DESCENDANTS only (not the buff itself)
+  const isPresetMatchingCurrentState = (buff, preset) => {
+    // Collect current active IDs from the buff's DESCENDANTS only
+    const collectActiveFromDescendants = (parentBuff) => {
+      const ids = [];
+      const traverse = (b) => {
+        if (b.isActive) ids.push(b.id);
+        (b.subBuffs || []).forEach(traverse);
+      };
+      // Only traverse descendants, not the parent buff itself
+      (parentBuff.subBuffs || []).forEach(traverse);
+      return ids;
+    };
+
+    const currentActiveIds = new Set(collectActiveFromDescendants(buff));
+    const presetActiveIds = new Set(preset.activeIds || []);
+
+    // Check if active IDs match
+    if (currentActiveIds.size !== presetActiveIds.size) return false;
+    for (const id of currentActiveIds) {
+      if (!presetActiveIds.has(id)) return false;
+    }
+
+    // Check if multiply values match (only for ACTIVE descendants)
+    // Multiply values of inactive variants don't affect calculations, so we ignore them
+    const collectMultiplyFromDescendants = (parentBuff) => {
+      const values = {};
+      const traverse = (b) => {
+        // Only collect multiply if this buff is active
+        if (b.isActive && b.multiply !== undefined && b.multiply !== 1) {
+          values[b.id] = b.multiply;
+        }
+        (b.subBuffs || []).forEach(traverse);
+      };
+      // Only traverse descendants, not the parent buff itself
+      (parentBuff.subBuffs || []).forEach(traverse);
+      return values;
+    };
+
+    const currentMultiply = collectMultiplyFromDescendants(buff);
+    const presetMultiply = preset.multiplyValues || {};
+    const allKeys = new Set([...Object.keys(currentMultiply), ...Object.keys(presetMultiply)]);
+    for (const key of allKeys) {
+      if ((currentMultiply[key] || 1) !== (presetMultiply[key] || 1)) return false;
+    }
+
+    return true;
+  };
+
+  // Update a buff node at a given path immutably
+  const updateBuffAtPath = (path, updater) => {
+    const newBuffs = JSON.parse(JSON.stringify(buffs)); // Deep clone
+    if (path.length === 1) {
+      newBuffs[path[0]] = updater(newBuffs[path[0]]);
+    } else {
+      let node = newBuffs[path[0]];
+      for (let i = 1; i < path.length - 1; i++) {
+        node = node.subBuffs[path[i]];
+      }
+      node.subBuffs[path[path.length - 1]] = updater(node.subBuffs[path[path.length - 1]]);
+    }
+    setBuffs(newBuffs);
+  };
+
+  // --- Variant Picker (path-based) ---
+
+  const openVariantPicker = (path) => {
+    setVariantPickerState({ path });
+    setVariantSearchQuery('');
+    setTimeout(() => {
+      _optionalChain([variantSearchInputRef, 'access', _vs1 => _vs1.current, 'optionalAccess', _vs2 => _vs2.focus, 'call', _vs3 => _vs3()]);
+    }, 50);
+  };
+
+  const closeVariantPicker = () => {
+    setVariantPickerState(null);
+    setVariantSearchQuery('');
+  };
+
+  // Collect all buffs recursively for the picker (flattened list with paths)
+  const collectAllBuffs = (buffList, parentPath = [], depth = 0) => {
+    const result = [];
+    buffList.forEach((buff, idx) => {
+      const path = [...parentPath, idx];
+      result.push({ buff, path, depth });
+      if (buff.subBuffs && buff.subBuffs.length > 0) {
+        result.push(...collectAllBuffs(buff.subBuffs, path, depth + 1));
+      }
+    });
+    return result;
+  };
+
+  // --- Sub Buff Handlers (path-based for infinite nesting) ---
+
+  const addSubBuff = (path, sourceBuff = null) => {
+    const newBuffs = JSON.parse(JSON.stringify(buffs));
+    const subBuffId = Math.random().toString(36).substr(2, 9);
+
+    // Navigate to the target node
+    let node = newBuffs[path[0]];
+    for (let i = 1; i < path.length; i++) {
+      node = node.subBuffs[path[i]];
+    }
+
+    if (!node.subBuffs) node.subBuffs = [];
+
+    let newSubBuff;
+    if (sourceBuff) {
+      // Deep copy the source buff (including nested subBuffs and presets)
+      const deepCopyBuff = (src) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: src.name,
+        multiply: src.multiply || 1,
+        isActive: false, // New variants start inactive
+        isCollapsed: false,
+        mods: src.mods.map(m => ({
+          id: Math.random().toString(36).substr(2, 9),
+          targetVar: m.targetVar,
+          type: m.type,
+          value: m.value
+        })),
+        subBuffs: (src.subBuffs || []).map(sb => deepCopyBuff(sb)),
+        presets: (src.presets || []).map(p => ({
+          id: Math.random().toString(36).substr(2, 9),
+          name: p.name,
+          activeIds: [...(p.activeIds || [])],
+          multiplyValues: { ...(p.multiplyValues || {}) }
+        }))
+      });
+      newSubBuff = deepCopyBuff(sourceBuff);
+    } else {
+      newSubBuff = { id: subBuffId, name: 'New Variant', mods: [], subBuffs: [], presets: [], multiply: 1, isActive: false, isCollapsed: false };
+    }
+
+    node.subBuffs.push(newSubBuff);
+    setBuffs(newBuffs);
+    closeVariantPicker();
+  };
+
+  const removeSubBuff = (path) => {
+    if (path.length < 2) return; // Can't remove top-level buff this way
+    const newBuffs = JSON.parse(JSON.stringify(buffs));
+
+    // Navigate to parent node
+    let parent = newBuffs[path[0]];
+    for (let i = 1; i < path.length - 1; i++) {
+      parent = parent.subBuffs[path[i]];
+    }
+
+    parent.subBuffs.splice(path[path.length - 1], 1);
+    setBuffs(newBuffs);
+  };
+
+  const updateBuffName = (path, val) => {
+    updateBuffAtPath(path, node => ({ ...node, name: val }));
+  };
+
+  const addModToBuff = (path) => {
+    const target = rows.length > 0 ? rows[0].name : '';
+    updateBuffAtPath(path, node => ({
+      ...node,
+      mods: [...node.mods, {
+        id: Math.random().toString(36).substr(2, 9),
+        targetVar: target,
+        type: 'mult',
+        value: 0.1
+      }]
+    }));
+  };
+
+  const updateMod = (path, modIndex, field, val) => {
+    updateBuffAtPath(path, node => {
+      const newMods = [...node.mods];
+      newMods[modIndex] = { ...newMods[modIndex], [field]: val };
+      return { ...node, mods: newMods };
+    });
+  };
+
+  const removeMod = (path, modIndex) => {
+    updateBuffAtPath(path, node => ({
+      ...node,
+      mods: node.mods.filter((_, i) => i !== modIndex)
+    }));
+  };
+
+  // --- Preset Handlers ---
+
+  // Helper to collect active IDs from a buff's DESCENDANTS only (not the buff itself)
+  // This is because a preset saves variant selections WITHIN a buff, not the buff's own state
+  const collectActiveIdsFromBuff = (buff) => {
+    const ids = [];
+    const traverse = (b) => {
+      if (b.isActive) ids.push(b.id);
+      (b.subBuffs || []).forEach(traverse);
+    };
+    // Only traverse descendants, not the buff itself
+    (buff.subBuffs || []).forEach(traverse);
+    return ids;
+  };
+
+  // Helper to collect multiply values from a buff's ACTIVE DESCENDANTS only (keyed by buff ID)
+  // We only care about multiply values of active variants since inactive ones don't affect calculations
+  const collectMultiplyFromBuff = (buff) => {
+    const values = {};
+    const traverse = (b) => {
+      // Only collect multiply if this buff is active
+      if (b.isActive && b.multiply !== undefined && b.multiply !== 1) {
+        values[b.id] = b.multiply;
+      }
+      (b.subBuffs || []).forEach(traverse);
+    };
+    // Only traverse descendants, not the buff itself
+    (buff.subBuffs || []).forEach(traverse);
+    return values;
+  };
+
+  // Add a new preset that captures the current variant selection (including all nested variants)
+  // Note: This is allowed during root preset editing (buff-level presets are in scope)
+  const addPreset = (path) => {
+    const buff = getBuffAtPath(path);
+    if (!buff) return;
+
+    // Collect active IDs and multiply values from this buff's subtree
+    const activeIds = collectActiveIdsFromBuff(buff);
+    const multiplyValues = collectMultiplyFromBuff(buff);
+
+    // Generate preset name from active sub-buff names
+    const selectedVariantNames = (buff.subBuffs || [])
+      .filter(sb => sb.isActive)
+      .map(sb => sb.name)
+      .filter(name => name && name.trim());
+    const presetName = selectedVariantNames.length > 0
+      ? selectedVariantNames.join(', ')
+      : `Preset ${(buff.presets || []).length + 1}`;
+
+    // Create preset with simplified format
+    const newPreset = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: presetName,
+      activeIds: activeIds,
+      multiplyValues: multiplyValues
+    };
+
+    updateBuffAtPath(path, node => ({
+      ...node,
+      presets: [...(node.presets || []), newPreset]
+    }));
+  };
+
+  // Apply a preset - set all nested variants to match the preset
+  // A preset only affects DESCENDANTS, not the buff's own state
+  // Note: This is allowed during root preset editing (buff-level presets are in scope)
+  const applyPreset = (path, preset) => {
+    const newBuffs = deepClone(buffs);
+
+    // Navigate to the target buff
+    let targetBuff = newBuffs[path[0]];
+    for (let i = 1; i < path.length; i++) {
+      targetBuff = targetBuff.subBuffs[path[i]];
+    }
+
+    // Apply active IDs and multiply values to DESCENDANTS only (not the buff itself)
+    const activeSet = new Set(preset.activeIds || []);
+    const multiplyValues = preset.multiplyValues || {};
+
+    const applyToDescendants = (buff) => {
+      buff.isActive = activeSet.has(buff.id);
+      buff.multiply = multiplyValues[buff.id] !== undefined ? multiplyValues[buff.id] : 1;
+      (buff.subBuffs || []).forEach(applyToDescendants);
+    };
+
+    // Apply to descendants only, not targetBuff itself
+    (targetBuff.subBuffs || []).forEach(applyToDescendants);
+    setBuffs(newBuffs);
+  };
+
+  // Remove a preset
+  const removePreset = (path, presetId) => {
+    updateBuffAtPath(path, node => ({
+      ...node,
+      presets: (node.presets || []).filter(p => p.id !== presetId)
+    }));
+  };
+
+  // Update preset name
+  const updatePresetName = (path, presetId, newName) => {
+    updateBuffAtPath(path, node => ({
+      ...node,
+      presets: (node.presets || []).map(p =>
+        p.id === presetId ? { ...p, name: newName } : p
+      )
+    }));
   };
 
   // --- Drag and Drop Handlers for Buffs ---
@@ -818,18 +1563,165 @@ const getInitialState = () => {
     setDragOverBuffId(null);
   };
 
+  // --- Variant Drag and Drop Handlers (scoped to same parent) ---
+
+  const handleVariantDragStart = (e, path) => {
+    // parentPath is all but the last index
+    const parentPath = path.slice(0, -1);
+    setDraggingVariant({ path, parentPath });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', path.join(','));
+  };
+
+  const handleVariantDragOver = (e, targetPath) => {
+    e.preventDefault();
+    if (!draggingVariant) return;
+
+    // Only allow drag over if same parent (same scope)
+    const targetParentPath = targetPath.slice(0, -1);
+    const isSameParent = draggingVariant.parentPath.length === targetParentPath.length &&
+      draggingVariant.parentPath.every((v, i) => v === targetParentPath[i]);
+
+    if (isSameParent && draggingVariant.path.join(',') !== targetPath.join(',')) {
+      setDragOverVariantPath(targetPath);
+    }
+  };
+
+  const handleVariantDragLeave = () => {
+    setDragOverVariantPath(null);
+  };
+
+  const handleVariantDrop = (e, targetPath) => {
+    e.preventDefault();
+    if (!draggingVariant) {
+      setDragOverVariantPath(null);
+      return;
+    }
+
+    const { path: fromPath, parentPath } = draggingVariant;
+    const targetParentPath = targetPath.slice(0, -1);
+
+    // Only allow drop if same parent
+    const isSameParent = parentPath.length === targetParentPath.length &&
+      parentPath.every((v, i) => v === targetParentPath[i]);
+
+    if (!isSameParent || fromPath.join(',') === targetPath.join(',')) {
+      setDraggingVariant(null);
+      setDragOverVariantPath(null);
+      return;
+    }
+
+    const fromIndex = fromPath[fromPath.length - 1];
+    const toIndex = targetPath[targetPath.length - 1];
+
+    // Get parent buff and reorder its subBuffs
+    const newBuffs = deepClone(buffs);
+    let parentBuff;
+    if (parentPath.length === 1) {
+      // Parent is a top-level buff
+      parentBuff = newBuffs[parentPath[0]];
+    } else {
+      // Navigate to nested parent
+      parentBuff = newBuffs[parentPath[0]];
+      for (let i = 1; i < parentPath.length; i++) {
+        parentBuff = parentBuff.subBuffs[parentPath[i]];
+      }
+    }
+
+    // Reorder subBuffs
+    const [moved] = parentBuff.subBuffs.splice(fromIndex, 1);
+    parentBuff.subBuffs.splice(toIndex, 0, moved);
+
+    setBuffs(newBuffs);
+    setDraggingVariant(null);
+    setDragOverVariantPath(null);
+  };
+
+  const handleVariantDragEnd = () => {
+    setDraggingVariant(null);
+    setDragOverVariantPath(null);
+  };
+
+  // --- Buff Preset Drag Handlers (scoped to same buff) ---
+
+  const handleBuffPresetDragStart = (e, path, presetId) => {
+    setDraggingBuffPreset({ buffPath: path, presetId });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `${path.join(',')}:${presetId}`);
+  };
+
+  const handleBuffPresetDragOver = (e, path, presetId) => {
+    e.preventDefault();
+    if (!draggingBuffPreset) return;
+
+    // Check same buff scope (compare paths)
+    const isSameBuff = draggingBuffPreset.buffPath.length === path.length &&
+      draggingBuffPreset.buffPath.every((v, i) => v === path[i]);
+
+    if (isSameBuff && draggingBuffPreset.presetId !== presetId) {
+      setDragOverBuffPresetKey(`${path.join(',')}:${presetId}`);
+    }
+  };
+
+  const handleBuffPresetDragLeave = () => {
+    setDragOverBuffPresetKey(null);
+  };
+
+  const handleBuffPresetDrop = (e, path, targetPresetId) => {
+    e.preventDefault();
+    if (!draggingBuffPreset) {
+      setDragOverBuffPresetKey(null);
+      return;
+    }
+
+    const { buffPath, presetId: fromPresetId } = draggingBuffPreset;
+
+    // Check same buff scope
+    const isSameBuff = buffPath.length === path.length &&
+      buffPath.every((v, i) => v === path[i]);
+
+    if (!isSameBuff || fromPresetId === targetPresetId) {
+      setDraggingBuffPreset(null);
+      setDragOverBuffPresetKey(null);
+      return;
+    }
+
+    // Find the buff and reorder its presets
+    const newBuffs = deepClone(buffs);
+    let buff;
+    if (path.length === 1) {
+      buff = newBuffs[path[0]];
+    } else {
+      buff = newBuffs[path[0]];
+      for (let i = 1; i < path.length; i++) {
+        buff = buff.subBuffs[path[i]];
+      }
+    }
+
+    const presets = buff.presets || [];
+    const fromIndex = presets.findIndex(p => p.id === fromPresetId);
+    const toIndex = presets.findIndex(p => p.id === targetPresetId);
+
+    if (fromIndex !== -1 && toIndex !== -1) {
+      const [moved] = presets.splice(fromIndex, 1);
+      presets.splice(toIndex, 0, moved);
+      setBuffs(newBuffs);
+    }
+
+    setDraggingBuffPreset(null);
+    setDragOverBuffPresetKey(null);
+  };
+
+  const handleBuffPresetDragEnd = () => {
+    setDraggingBuffPreset(null);
+    setDragOverBuffPresetKey(null);
+  };
+
   // --- Import / Export Handlers ---
 
   const handleExport = () => {
-    const data = {
-      version: 1,
-      rows,
-      buffs,
-      buffSets,
-      activeBuffIds: Array.from(activeBuffIds),
-      activeBuffSetId,
-      activeTargetId
-    };
+    // Export using shared format (includes workspaces if any)
+    const data = createExportData(rows, rootBuff, activeTargetId, workspaces);
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -849,6 +1741,10 @@ const getInitialState = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Exit edit mode if active (discards changes)
+    if (editingPreset) {
+      setEditingPreset(null); // Just clear, don't re-apply since we're loading new state anyway
+    }
     setIsLoading(true);
 
     setTimeout(() => {
@@ -857,19 +1753,15 @@ const getInitialState = () => {
             try {
                 const data = JSON.parse(event.target.result);
 
-                if (!data.rows || !Array.isArray(data.rows)) throw new Error("Invalid rows data");
-                if (!data.buffs || !Array.isArray(data.buffs)) throw new Error("Invalid buffs data");
+                // Use shared parsing logic
+                const parsed = parseImportData(data);
+                setRows(parsed.rows);
+                setRootBuff(parsed.rootBuff);
+                setActiveTargetId(parsed.activeTargetId);
 
-                setRows(data.rows);
-                setBuffs(data.buffs);
-                setBuffSets(data.buffSets || []);
-                setActiveBuffIds(new Set(data.activeBuffIds || []));
-                setActiveBuffSetId(data.activeBuffSetId || null);
-
-                if (data.activeTargetId && data.rows.find(r => r.id === data.activeTargetId)) {
-                setActiveTargetId(data.activeTargetId);
-                } else if (data.rows.length > 0) {
-                setActiveTargetId(data.rows[data.rows.length - 1].id);
+                // Import workspaces if present (optional field - backwards compatible)
+                if (data.workspaces && Array.isArray(data.workspaces)) {
+                  setWorkspaces(data.workspaces);
                 }
 
             } catch (err) {
@@ -884,67 +1776,6 @@ const getInitialState = () => {
         reader.readAsText(file);
     }, 100);
   };
-
-  const handleShare = async () => {
-    setShareStatus('copying');
-    try {
-      const state = {
-        rows,
-        buffs,
-        buffSets,
-        activeBuffIds: Array.from(activeBuffIds),
-        activeBuffSetId,
-        activeTargetId
-      };
-      const encoded = encodeStateToUrl(state);
-      if (!encoded) {
-        throw new Error('Failed to encode state');
-      }
-
-      const baseUrl = window.location.origin + window.location.pathname;
-      const shareUrl = `${baseUrl}?d=${encoded}`;
-
-      await navigator.clipboard.writeText(shareUrl);
-      setShareStatus('copied');
-      setTimeout(() => setShareStatus(null), 2500);
-    } catch (err) {
-      console.log('Share error:', err);
-      setShareStatus('error');
-      setTimeout(() => setShareStatus(null), 2500);
-    }
-  };
-
-  const handleConfirmSharedState = () => {
-    if (!pendingSharedState) return;
-
-    // Load the shared state
-    setRows(pendingSharedState.rows || rows);
-    setBuffs(pendingSharedState.buffs || buffs);
-    setBuffSets(pendingSharedState.buffSets || buffSets);
-    setActiveBuffIds(new Set(pendingSharedState.activeBuffIds || []));
-    setActiveBuffSetId(pendingSharedState.activeBuffSetId || null);
-
-    if (pendingSharedState.activeTargetId) {
-      setActiveTargetId(pendingSharedState.activeTargetId);
-    }
-
-    // Clear the pending state and show banner
-    setPendingSharedState(null);
-    setShowUrlBanner(true);
-
-    // Clear the URL parameter without reloading
-    const newUrl = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, '', newUrl);
-  };
-
-  const handleCancelSharedState = () => {
-    setPendingSharedState(null);
-
-    // Clear the URL parameter without reloading
-    const newUrl = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, '', newUrl);
-  };
-
 
   const activeRowObj = rows.find(r => r.id === activeTargetId) || rows[rows.length - 1];
   const finalTree = _optionalChain([mainResult, 'access', _18 => _18.computed, 'access', _19 => _19[_optionalChain([activeRowObj, 'optionalAccess', _20 => _20.name])], 'optionalAccess', _21 => _21.displayTree]) || null;
@@ -985,65 +1816,138 @@ const getInitialState = () => {
         )
       )
 
-      /* Shared Link Confirmation Modal */
-      , pendingSharedState && (
-        _react2.default.createElement('div', { className: "fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center",}
-            , _react2.default.createElement('div', { className: "bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4",}
-                , _react2.default.createElement('div', { className: "flex items-center gap-3 mb-4",}
-                    , _react2.default.createElement(_lucidereact.Share2, { className: "w-6 h-6 text-emerald-600",})
-                    , _react2.default.createElement('h3', { className: "text-lg font-bold text-slate-800",}, "Load Shared Configuration?")
-                )
-                , _react2.default.createElement('p', { className: "text-slate-600 text-sm mb-2",}
-                    , "Someone shared a Logic Chain configuration with you. Loading it will replace your current data."
-                )
-                , _react2.default.createElement('div', { className: "bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4",}
-                    , _react2.default.createElement('div', { className: "flex items-start gap-2",}
-                        , _react2.default.createElement(_lucidereact.AlertCircle, { className: "w-4 h-4 text-amber-600 mt-0.5 shrink-0",})
-                        , _react2.default.createElement('p', { className: "text-amber-800 text-xs",}
-                            , _react2.default.createElement('span', { className: "font-semibold",}, "Warning:")
-                            , " This will overwrite your locally saved configuration. Your current data will be lost."
-                        )
-                    )
-                )
-                , _react2.default.createElement('div', { className: "bg-slate-50 rounded-lg p-3 mb-4 text-xs text-slate-600",}
-                    , _react2.default.createElement('div', { className: "font-semibold text-slate-700 mb-1",}, "Shared configuration contains:")
-                    , _react2.default.createElement('ul', { className: "space-y-0.5",}
-                        , _react2.default.createElement('li', null, "• ", pendingSharedState.rows ? pendingSharedState.rows.length : 0, " calculation rows")
-                        , _react2.default.createElement('li', null, "• ", pendingSharedState.buffs ? pendingSharedState.buffs.length : 0, " buffs")
-                        , _react2.default.createElement('li', null, "• ", pendingSharedState.buffSets ? pendingSharedState.buffSets.length : 0, " buff sets")
-                    )
-                )
-                , _react2.default.createElement('div', { className: "flex gap-3",}
-                    , _react2.default.createElement('button', {
-                        onClick: handleCancelSharedState,
-                        className: "flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium",}
-                        , "Keep My Data"
-                    )
-                    , _react2.default.createElement('button', {
-                        onClick: handleConfirmSharedState,
-                        className: "flex-1 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium",}
-                        , "Load Shared"
-                    )
-                )
-            )
-        )
-      )
+      /* Variant Picker Modal */
+      , variantPickerState && (
+        _react2.default.createElement('div', {
+          className: "fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center",
+          onClick: closeVariantPicker,}
+          , _react2.default.createElement('div', {
+            className: "bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden",
+            onClick: (e) => e.stopPropagation(),}
 
-      /* Shared Link Banner */
-      , showUrlBanner && (
-        _react2.default.createElement('div', { className: "mb-4 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center justify-between gap-3",}
-            , _react2.default.createElement('div', { className: "flex items-center gap-2",}
-                , _react2.default.createElement(_lucidereact.Share2, { className: "w-5 h-5 text-emerald-600 shrink-0",})
-                , _react2.default.createElement('span', { className: "text-sm text-emerald-800",}
-                    , _react2.default.createElement('span', { className: "font-semibold",}, "Shared configuration loaded!")
-                    , " You're viewing a shared Logic Chain. Any changes you make will be saved locally."
+            /* Modal Header */
+            , _react2.default.createElement('div', { className: "p-4 border-b border-slate-200 bg-gradient-to-r from-violet-50 to-slate-50",}
+              , _react2.default.createElement('div', { className: "flex items-center justify-between mb-3",}
+                , _react2.default.createElement('div', { className: "flex items-center gap-2",}
+                  , _react2.default.createElement(_lucidereact.Layers, { size: 18, className: "text-violet-600",})
+                  , _react2.default.createElement('h3', { className: "text-lg font-bold text-slate-800",}, "Add Variant")
                 )
+                , _react2.default.createElement('button', {
+                  onClick: closeVariantPicker,
+                  className: "text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-100",}
+                  , _react2.default.createElement(_lucidereact.X, { size: 18,})
+                )
+              )
+              , _react2.default.createElement('p', { className: "text-xs text-slate-500 mb-3",}
+                , "Create a blank variant or copy modifications from an existing buff."
+              )
+              /* Search Input */
+              , _react2.default.createElement('div', { className: "relative",}
+                , _react2.default.createElement(_lucidereact.Search, { size: 14, className: "absolute left-3 top-1/2 -translate-y-1/2 text-slate-400",})
+                , _react2.default.createElement('input', {
+                  ref: variantSearchInputRef,
+                  type: "text",
+                  placeholder: "Search buffs...",
+                  value: variantSearchQuery,
+                  onChange: (e) => setVariantSearchQuery(e.target.value),
+                  className: "w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400",}
+                )
+              )
             )
-            , _react2.default.createElement('button', {
-                onClick: () => setShowUrlBanner(false),
-                className: "text-emerald-600 hover:text-emerald-800 p-1 rounded hover:bg-emerald-100 transition-colors shrink-0",}
-                , _react2.default.createElement(_lucidereact.X, { size: 16,})
+
+            /* Buff List */
+            , _react2.default.createElement('div', { className: "flex-1 overflow-y-auto p-2", style: { maxHeight: '300px' },}
+              /* Blank Variant Option */
+              , _react2.default.createElement('button', {
+                onClick: () => addSubBuff(variantPickerState.path, null),
+                className: "w-full p-3 mb-2 rounded-lg border-2 border-dashed border-slate-300 hover:border-violet-400 hover:bg-violet-50 transition-all flex items-center gap-3 text-left group",}
+                , _react2.default.createElement('div', { className: "w-8 h-8 rounded-full bg-slate-100 group-hover:bg-violet-100 flex items-center justify-center shrink-0 transition-colors",}
+                  , _react2.default.createElement(_lucidereact.Plus, { size: 16, className: "text-slate-400 group-hover:text-violet-600",})
+                )
+                , _react2.default.createElement('div', null
+                  , _react2.default.createElement('div', { className: "font-semibold text-slate-700 text-sm",}, "Blank Variant")
+                  , _react2.default.createElement('div', { className: "text-[10px] text-slate-400",}, "Start with no modifications")
+                )
+              )
+
+              /* Divider */
+              , buffs.length > 0 && _react2.default.createElement('div', { className: "flex items-center gap-2 my-2 px-2",}
+                , _react2.default.createElement('div', { className: "flex-1 h-px bg-slate-200",})
+                , _react2.default.createElement('span', { className: "text-[10px] text-slate-400 uppercase tracking-wide font-medium",}, "Copy from buff")
+                , _react2.default.createElement('div', { className: "flex-1 h-px bg-slate-200",})
+              )
+
+              /* Filtered Buff List - uses collectAllBuffs for nested display */
+              , (() => {
+                const query = variantSearchQuery.toLowerCase().trim();
+                const currentBuff = getBuffAtPath(variantPickerState.path);
+                const currentBuffId = currentBuff ? currentBuff.id : null;
+
+                // Collect all buffs recursively with their paths and depths
+                const allBuffItems = collectAllBuffs(buffs);
+
+                // Filter out the current buff and apply search
+                const filteredItems = allBuffItems.filter(item => {
+                  // Exclude the current buff (can't copy from self)
+                  if (item.buff.id === currentBuffId) return false;
+                  if (!query) return true;
+                  return item.buff.name.toLowerCase().includes(query);
+                });
+
+                if (filteredItems.length === 0) {
+                  return _react2.default.createElement('div', { className: "text-center py-6 text-slate-400 text-sm",}
+                    , query ? `No buffs matching "${variantSearchQuery}"` : "No other buffs available"
+                  );
+                }
+
+                return filteredItems.map(item => {
+                  const b = item.buff;
+                  const isNested = item.depth > 0;
+                  const indentPadding = item.depth * 12;
+
+                  return _react2.default.createElement('button', {
+                    key: b.id,
+                    onClick: () => addSubBuff(variantPickerState.path, b),
+                    className: "w-full p-3 mb-1.5 rounded-lg border border-slate-200 hover:border-violet-300 hover:bg-violet-50/50 transition-all flex items-center gap-3 text-left group",
+                    style: { marginLeft: indentPadding + 'px', width: 'calc(100% - ' + indentPadding + 'px)' },}
+                    , _react2.default.createElement('div', { className: isNested
+                        ? "w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0"
+                        : "w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0",}
+                      , isNested
+                        ? _react2.default.createElement(_lucidereact.Layers, { size: 12, className: "text-violet-600",})
+                        : _react2.default.createElement(_lucidereact.Zap, { size: 14, className: "text-amber-600", fill: "currentColor",})
+                    )
+                    , _react2.default.createElement('div', { className: "flex-1 min-w-0",}
+                      , _react2.default.createElement('div', { className: "font-semibold text-slate-700 text-sm truncate flex items-center gap-1.5",}
+                        , isNested && _react2.default.createElement('span', { className: "text-violet-400 text-[10px]",}, "↳")
+                        , b.name
+                      )
+                      , _react2.default.createElement('div', { className: "text-[10px] text-slate-400 flex items-center gap-2",}
+                        , _react2.default.createElement('span', null, b.mods.length, " mod", b.mods.length !== 1 ? "s" : "")
+                        , (b.subBuffs || []).length > 0 && _react2.default.createElement('span', { className: "text-slate-300",}, "•")
+                        , (b.subBuffs || []).length > 0 && _react2.default.createElement('span', null, (b.subBuffs || []).length, " variant", (b.subBuffs || []).length !== 1 ? "s" : "")
+                        , b.mods.length > 0 && _react2.default.createElement('span', { className: "text-slate-300",}, "•")
+                        , b.mods.length > 0 && _react2.default.createElement('span', { className: "truncate",}
+                          , b.mods.slice(0, 2).map(m => `${m.targetVar} ${m.type === 'mult' ? (m.value >= 0 ? '+' : '') + (m.value * 100).toFixed(0) + '%' : (m.value >= 0 ? '+' : '') + m.value}`).join(', ')
+                          , b.mods.length > 2 ? '...' : ''
+                        )
+                      )
+                    )
+                    , _react2.default.createElement(_lucidereact.Copy, { size: 14, className: "text-slate-300 group-hover:text-violet-500 shrink-0",})
+                  );
+                });
+              })()
             )
+
+            /* Modal Footer */
+            , _react2.default.createElement('div', { className: "p-3 border-t border-slate-100 bg-slate-50",}
+              , _react2.default.createElement('button', {
+                onClick: closeVariantPicker,
+                className: "w-full py-2 text-sm text-slate-600 hover:text-slate-800 font-medium",}
+                , "Cancel"
+              )
+            )
+          )
         )
       )
 
@@ -1059,22 +1963,6 @@ const getInitialState = () => {
         )
 
         , _react2.default.createElement('div', { className: "flex items-center gap-2"  ,}
-          , _react2.default.createElement('button', {
-            onClick: handleShare,
-            disabled: isLoading || shareStatus === 'copying',
-            className: `flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-              shareStatus === 'copied'
-                ? 'bg-emerald-500 border-emerald-500 text-white'
-                : shareStatus === 'error'
-                ? 'bg-red-500 border-red-500 text-white'
-                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-emerald-600 hover:border-emerald-300'
-            }`,}
-            , shareStatus === 'copying' && _react2.default.createElement(_lucidereact.Loader2, { size: 16, className: "animate-spin",})
-            , shareStatus === 'copied' && _react2.default.createElement(_lucidereact.Check, { size: 16,})
-            , shareStatus === 'error' && _react2.default.createElement(_lucidereact.AlertCircle, { size: 16,})
-            , !shareStatus && _react2.default.createElement(_lucidereact.Share2, { size: 16,})
-            , shareStatus === 'copied' ? 'Copied!' : shareStatus === 'error' ? 'Failed' : 'Share'
-          )
           , _react2.default.createElement('button', {
             onClick: handleExport,
             disabled: isLoading,
@@ -1098,6 +1986,93 @@ const getInitialState = () => {
             className: "hidden",}
           )
         )
+      )
+
+      /* Workspaces Section */
+      , _react2.default.createElement('div', { className: "mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"      ,}
+        , _react2.default.createElement('div', { className: "p-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center"      ,}
+            , _react2.default.createElement('h2', { className: "font-bold text-slate-700 flex items-center gap-2 text-sm"     ,}
+                , _react2.default.createElement(_lucidereact.FolderOpen, { size: 16, className: "text-indigo-500",} ), " Workspaces"
+            )
+            , _react2.default.createElement('button', {
+                onClick: saveAsWorkspace,
+                disabled: isLoading,
+                className: "flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded transition-colors"       ,}
+                , _react2.default.createElement(_lucidereact.Plus, { size: 12,} ), " Save As Workspace"
+            )
+        )
+        , workspaces.length > 0 && _react2.default.createElement('div', { className: "p-3",}
+            , _react2.default.createElement('div', { className: "flex flex-wrap gap-2"  ,}
+                , workspaces.map(workspace => {
+                    const savedDate = workspace.savedAt ? new Date(workspace.savedAt).toLocaleDateString() : '';
+                    const isConfirmingLoad = confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspace.id && confirmingWorkspaceAction.action === 'load';
+                    const isConfirmingDelete = confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspace.id && confirmingWorkspaceAction.action === 'delete';
+                    const isConfirmingAny = isConfirmingLoad || isConfirmingDelete;
+
+                    return _react2.default.createElement('div', {
+                        key: workspace.id,
+                        className: `group flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-all border-2 ${isConfirmingAny ? 'bg-white border-slate-300 shadow-sm' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 hover:shadow-sm'}`,}
+
+                        , _react2.default.createElement(_lucidereact.FileText, { size: 14, className: "shrink-0 text-slate-400"   ,} )
+                        , _react2.default.createElement('div', { className: "flex flex-col min-w-0"   ,}
+                            , _react2.default.createElement('input', {
+                                type: "text",
+                                value: workspace.name,
+                                onChange: (e) => updateWorkspaceName(workspace.id, e.target.value),
+                                onFocus: cancelWorkspaceActionConfirm,
+                                className: "font-bold bg-transparent outline-none text-xs text-slate-600 cursor-text focus:bg-white focus:border focus:border-indigo-400 focus:rounded focus:px-1"            ,
+                                placeholder: "Workspace Name",}
+                            )
+                            , _react2.default.createElement('div', { className: "flex items-center gap-1 text-[10px] text-slate-400"     ,}
+                                , _react2.default.createElement('span', null, workspace.rows ? workspace.rows.length : 0, " rows"  )
+                                , savedDate && _react2.default.createElement('span', null, "· ", savedDate)
+                            )
+                        )
+
+                        , _react2.default.createElement('div', { className: "flex items-center gap-0.5 ml-1"   ,}
+                            /* Load button / Load? confirm button */
+                            , isConfirmingLoad ? (
+                                _react2.default.createElement('button', {
+                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'load'),
+                                    className: "px-2 py-1 text-white bg-indigo-500 hover:bg-indigo-600 rounded text-[10px] font-bold transition-colors"       ,}
+                                    , "Load?"
+                                )
+                            ) : (
+                                _react2.default.createElement('button', {
+                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'load'),
+                                    className: "p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"     ,
+                                    title: "Load workspace" ,}
+                                    , _react2.default.createElement(_lucidereact.Upload, { size: 12,} )
+                                )
+                            )
+                            /* Delete button / Delete? confirm button */
+                            , isConfirmingDelete ? (
+                                _react2.default.createElement('button', {
+                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'delete'),
+                                    className: "px-2 py-1 text-white bg-red-500 hover:bg-red-600 rounded text-[10px] font-bold transition-colors"       ,}
+                                    , "Delete?"
+                                )
+                            ) : (
+                                _react2.default.createElement('button', {
+                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'delete'),
+                                    className: "p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"     ,
+                                    title: "Delete workspace" ,}
+                                    , _react2.default.createElement(_lucidereact.Trash2, { size: 12,} )
+                                )
+                            )
+                            /* Cancel button when confirming */
+                            , isConfirmingAny && _react2.default.createElement('button', {
+                                onClick: cancelWorkspaceActionConfirm,
+                                className: "p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"     ,
+                                title: "Cancel",}
+                                , _react2.default.createElement(_lucidereact.X, { size: 12,} )
+                            )
+                        )
+                    );
+                })
+            )
+        )
+        , workspaces.length === 0 && _react2.default.createElement('div', { className: "px-3 py-2 text-xs text-slate-400 italic"    ,}, "No workspaces saved yet"   )
       )
 
       , _react2.default.createElement('div', { className: "grid grid-cols-1 lg:grid-cols-12 gap-8"   ,}
@@ -1211,6 +2186,7 @@ const getInitialState = () => {
                                                                     ? `${buff.value >= 0 ? '+' : ''}${(buff.value * 100).toFixed(0)}%`
                                                                     : `${buff.value >= 0 ? '+' : ''}${buff.value.toLocaleString()}`
                                                             )
+                                                            , buff.multiply && buff.multiply > 1 && _react2.default.createElement('span', { className: "text-slate-400 font-mono",}, `(×${buff.multiply})`)
                                                         )
                                                     ))
                                                 )
@@ -1243,111 +2219,144 @@ const getInitialState = () => {
               )
             )
 
-            /* Buff Sets Panel */
+            /* Saved Builds Panel (Root Presets) */
             , _react2.default.createElement('div', { className: "mb-4",}
                 , _react2.default.createElement('div', { className: "flex items-center gap-2 mb-2"   ,}
                     , _react2.default.createElement(_lucidereact.Bookmark, { size: 14, className: "text-slate-400",} )
-                    , _react2.default.createElement('span', { className: "text-xs font-bold text-slate-500 uppercase tracking-wide"    ,}, "Saved Sets" )
+                    , _react2.default.createElement('span', { className: "text-xs font-bold text-slate-500 uppercase tracking-wide"    ,}, "Saved Builds" )
                 )
 
                 , _react2.default.createElement('div', { className: "flex flex-col gap-1.5"  ,}
-                    , buffSets.length > 0 && buffSets.map(set => {
-                        const preview = buffSetPreviews[set.id];
-                        const isCurrent = activeBuffSetId === set.id;
-                        // Check if current buffs match the saved set's buffs
-                        const savedIds = new Set(set.activeIds);
-                        const isModified = isCurrent && (
-                            savedIds.size !== activeBuffIds.size ||
-                            [...savedIds].some(id => !activeBuffIds.has(id))
-                        );
-                        // Get buff names for preview
-                        const buffNames = set.activeIds
-                            .map(id => buffs.find(b => b.id === id))
-                            .filter(Boolean)
-                            .map(b => b.name);
+                    , (rootBuff.presets || []).length > 0 && (rootBuff.presets || []).map(preset => {
+                        const presetKey = `root:preset:${preset.id}`;
+                        const preview = presetPreviews[presetKey];
+                        const isEditing = editingPreset && editingPreset.id === preset.id;
+                        // When editing, always show as current; otherwise check state match
+                        const isCurrent = isEditing || isPresetMatchingCurrentState(rootBuff, preset);
+
+                        // Get buff names for preview (using new simplified activeIds format)
+                        const presetActiveIds = preset.activeIds || [];
+                        // Find top-level buffs that are in the preset's active IDs
+                        const buffNames = buffs
+                            .filter(b => presetActiveIds.includes(b.id))
+                            .map(b => {
+                              // Count active sub-buffs
+                              const countInPreset = (buff) => {
+                                let c = 0;
+                                (buff.subBuffs || []).forEach(sb => {
+                                  if (presetActiveIds.includes(sb.id)) {
+                                    c += 1 + countInPreset(sb);
+                                  }
+                                });
+                                return c;
+                              };
+                              const subCount = countInPreset(b);
+                              return subCount > 0 ? `${b.name} (+${subCount})` : b.name;
+                            });
                         const buffPreviewText = buffNames.length > 0
                             ? buffNames.join(', ')
                             : 'No buffs';
                         return (
                             _react2.default.createElement('div', {
-                                key: set.id,
-                                onDragOver: (e) => handleBuffSetDragOver(e, set.id),
-                                onDragLeave: handleBuffSetDragLeave,
-                                onDrop: (e) => handleBuffSetDrop(e, set.id),
+                                key: preset.id,
+                                onDragOver: (e) => handleRootPresetDragOver(e, preset.id),
+                                onDragLeave: handleRootPresetDragLeave,
+                                onDrop: (e) => handleRootPresetDrop(e, preset.id),
                                 className: `group flex items-center justify-between gap-1 rounded-lg px-3 py-2 text-xs transition-all border-2 ${
-                                    draggingBuffSetId === set.id ? 'opacity-50' : ''
+                                    draggingBuffSetId === preset.id ? 'opacity-50' : ''
                                 } ${
-                                    dragOverBuffSetId === set.id ? 'border-indigo-500 bg-indigo-50' : ''
+                                    dragOverBuffSetId === preset.id ? 'border-indigo-500 bg-indigo-50' : ''
                                 } ${
-                                    isCurrent
-                                        ? (isModified
-                                            ? 'bg-white border-orange-400 shadow-md ring-2 ring-orange-100'
-                                            : 'bg-white border-indigo-400 shadow-md ring-2 ring-indigo-100')
-                                        : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 hover:shadow-sm cursor-pointer'
+                                    isEditing
+                                        ? 'bg-amber-50 border-amber-400 shadow-md ring-2 ring-amber-100'
+                                        : isCurrent
+                                            ? 'bg-white border-indigo-400 shadow-md ring-2 ring-indigo-100'
+                                            : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 hover:shadow-sm cursor-pointer'
                                 }`,
-                                onClick: () => !isCurrent && loadBuffSet(set),
-                                role: isCurrent ? undefined : "button",
-                                tabIndex: isCurrent ? undefined : 0,
-                                onKeyDown: (e) => !isCurrent && (e.key === 'Enter' || e.key === ' ') && loadBuffSet(set),}
+                                onClick: () => !isCurrent && !isEditing && handleRootPresetClick(preset),
+                                role: isCurrent || isEditing ? undefined : "button",
+                                tabIndex: isCurrent || isEditing ? undefined : 0,
+                                onKeyDown: (e) => !isCurrent && !isEditing && (e.key === 'Enter' || e.key === ' ') && handleRootPresetClick(preset),}
                                 , _react2.default.createElement('div', {
                                     draggable: true,
-                                    onDragStart: (e) => handleBuffSetDragStart(e, set.id),
-                                    onDragEnd: handleBuffSetDragEnd,
+                                    onDragStart: (e) => handleRootPresetDragStart(e, preset.id),
+                                    onDragEnd: handleRootPresetDragEnd,
                                     className: "shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none mr-1"    ,
                                     onClick: (e) => e.stopPropagation(),
                                     onMouseDown: (e) => e.stopPropagation(),}
                                     , _react2.default.createElement(_lucidereact.GripVertical, { size: 14,} )
                                 )
                                 , _react2.default.createElement('div', { className: "flex items-center gap-2 flex-1 min-w-0"    ,}
-                                    , _react2.default.createElement(_lucidereact.FolderOpen, { size: 14, className: `shrink-0 ${isCurrent ? (isModified ? 'text-orange-500' : 'text-indigo-500') : 'text-slate-400'}`,} )
+                                    , _react2.default.createElement(_lucidereact.FolderOpen, { size: 14, className: `shrink-0 ${isCurrent ? 'text-indigo-500' : 'text-slate-400'}`,} )
                                     , _react2.default.createElement('div', { className: "flex flex-col min-w-0 flex-1"   ,}
                                         , _react2.default.createElement('input', {
                                             type: "text",
-                                            value: set.name,
+                                            value: preset.name,
                                             onChange: (e) => {
                                                 const newName = e.target.value;
-                                                setBuffSets(buffSets.map(s => s.id === set.id ? { ...s, name: newName } : s));
+                                                updateRootPresetName(preset.id, newName);
                                             },
                                             onClick: (e) => e.stopPropagation(),
                                             readOnly: !isCurrent,
                                             className: `font-bold bg-transparent outline-none text-xs truncate ${isCurrent ? 'text-slate-800 cursor-text' : 'text-slate-600 cursor-pointer pointer-events-none'}`,
-                                            placeholder: "Set Name",
+                                            placeholder: "Build Name",
                                         })
                                         , _react2.default.createElement('div', { className: "flex items-center gap-2 text-[10px] min-w-0"    ,}
                                             , _react2.default.createElement('span', { className: "text-slate-400 truncate", title: buffPreviewText,}
-                                                , set.activeIds.length, " · ", buffPreviewText
+                                                , presetActiveIds.length, " · ", buffPreviewText
                                             )
-                                            , !isCurrent && preview && preview.delta !== 0 && (
-                                                _react2.default.createElement('span', { className: `flex items-center gap-0.5 font-bold ${preview.delta > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
-                                                    , preview.delta > 0 ? '+' : '', preview.delta.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                                                    , _react2.default.createElement('span', { className: "opacity-80",}, "(", preview.percent > 0 ? '+' : '', preview.percent.toFixed(0), "%)")
+                                            , !isCurrent && preview && preview.percent !== 0 && (
+                                                _react2.default.createElement('span', { className: `flex items-center gap-0.5 font-bold ${preview.percent > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
+                                                    , preview.percent > 0 ? '+' : ''
+                                                    , preview.percent.toFixed(1), "%"
                                                 )
                                             )
-                                            , isCurrent && (
-                                                isModified ? (
-                                                    _react2.default.createElement('span', { className: "text-orange-500 italic font-medium"  ,}, "Modified")
-                                                ) : (
-                                                    _react2.default.createElement('span', { className: "text-indigo-500 italic font-medium"  ,}, "Active")
-                                                )
+                                            , isEditing && (
+                                                _react2.default.createElement('span', { className: "text-amber-600 italic font-medium"  ,}, "Editing...")
+                                            )
+                                            , isCurrent && !isEditing && (
+                                                _react2.default.createElement('span', { className: "text-indigo-500 italic font-medium"  ,}, "Active")
                                             )
                                         )
                                     )
                                 )
 
                                 , _react2.default.createElement('div', { className: "flex items-center gap-1", onClick: (e) => e.stopPropagation(),}
-                                    , isModified && _react2.default.createElement('button', {
-                                        onClick: () => updateBuffSet(set.id),
-                                        className: "p-1.5 text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded transition-colors"     ,
-                                        title: "Save changes to this set"   ,}
-
-                                        , _react2.default.createElement(_lucidereact.Save, { size: 12,} )
+                                    /* Edit button - shown when current and not editing */
+                                    , isCurrent && !isEditing && (
+                                        _react2.default.createElement('button', {
+                                            onClick: () => startEditingRootPreset(preset),
+                                            className: "p-1.5 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded transition-colors"     ,
+                                            title: "Edit build" ,}
+                                            , _react2.default.createElement(_lucidereact.Pencil, { size: 12,} )
+                                        )
                                     )
-                                    , _react2.default.createElement('button', {
-                                        onClick: () => deleteBuffSet(set.id),
-                                        className: "p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"     ,
-                                        title: "Delete set" ,}
-
-                                        , _react2.default.createElement(_lucidereact.Trash2, { size: 12,} )
+                                    /* Save button - shown when editing */
+                                    , isEditing && (
+                                        _react2.default.createElement('button', {
+                                            onClick: savePresetEdit,
+                                            className: "p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-100 rounded transition-colors"     ,
+                                            title: "Save changes" ,}
+                                            , _react2.default.createElement(_lucidereact.Save, { size: 12,} )
+                                        )
+                                    )
+                                    /* Cancel button - shown when editing */
+                                    , isEditing && (
+                                        _react2.default.createElement('button', {
+                                            onClick: discardPresetEdit,
+                                            className: "p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"     ,
+                                            title: "Cancel editing" ,}
+                                            , _react2.default.createElement(_lucidereact.X, { size: 12,} )
+                                        )
+                                    )
+                                    /* Delete button - hidden when editing */
+                                    , !isEditing && (
+                                        _react2.default.createElement('button', {
+                                            onClick: () => deleteRootPreset(preset.id),
+                                            className: "p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"     ,
+                                            title: "Delete build" ,}
+                                            , _react2.default.createElement(_lucidereact.Trash2, { size: 12,} )
+                                        )
                                     )
                                 )
                             )
@@ -1355,100 +2364,414 @@ const getInitialState = () => {
                     })
 
                     , _react2.default.createElement('button', {
-                        onClick: createBuffSet,
+                        onClick: createRootPreset,
                         className: "w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all flex justify-center items-center gap-2 font-medium text-xs",}
-                        , _react2.default.createElement(_lucidereact.Plus, { size: 12,} ), " Create New Set"
+                        , _react2.default.createElement(_lucidereact.Plus, { size: 12,} ), " Save Current Build"
                     )
                 )
             )
 
-            /* Active Buffs List */
-            , buffs.map((buff, bIndex) => {
-              const isActive = activeBuffIds.has(buff.id);
-              const preview = previews[buff.id];
+            /* Recursive BuffNode Component - Renders buff and all nested variants consistently */
+            , (() => {
+              // Recursive component for rendering buff nodes at any depth
+              const renderBuffNode = (buff, path, depth = 0, parentActive = true) => {
+                const isTopLevel = depth === 0;
 
-              return (
+                // Determine if this buff is effectively active (checked AND parent is active)
+                const isActive = parentActive && buff.isActive;
+
+                // For variants: check if it's "remembered" as selected even though parent is inactive
+                const isRemembered = !parentActive && buff.isActive;
+
+                const hasSubBuffs = (buff.subBuffs || []).length > 0;
+
+                // Count active sub-buffs recursively
+                const countActiveSubBuffs = (b) => {
+                  let count = 0;
+                  (b.subBuffs || []).forEach(sb => {
+                    if (sb.isActive) {
+                      count += 1 + countActiveSubBuffs(sb);
+                    }
+                  });
+                  return count;
+                };
+                // Always show the count of remembered active sub-buffs (even if buff is inactive)
+                const activeSubCount = countActiveSubBuffs(buff);
+
+                // Get preview delta for this buff
+                const preview = previews[buff.id];
+
+                // Check if this buff is collapsed
+                const isCollapsed = buff.isCollapsed;
+
+                // Get selected first-level variant names for collapsed description
+                const selectedVariantNames = (buff.subBuffs || [])
+                  .filter(sb => sb.isActive)
+                  .map(sb => sb.name)
+                  .join(', ');
+
+                // Styling based on depth
+                const accentColor = 'amber'; // Consistent amber for all levels
+                const borderRadius = 'rounded-lg';
+
+                return _react2.default.createElement('div', {
+                  key: buff.id,
+                  className: `${borderRadius} border transition-all overflow-hidden ${
+                    isActive ? `border-${accentColor}-300 shadow-sm` : isRemembered ? 'border-slate-300 border-dashed' : 'border-slate-200'
+                  } ${!parentActive && !isRemembered ? 'opacity-50' : !parentActive ? 'opacity-70' : ''}`,
+                  style: depth > 0 ? { marginLeft: '0' } : {},}
+
+                  /* ═══ HEADER ═══ */
+                  , _react2.default.createElement('div', {
+                    className: `px-3 py-2 flex items-center gap-2 ${isActive ? 'bg-amber-50' : 'bg-slate-50'}`,}
+
+                    /* Drag Handle - top level uses buff handlers, variants use scoped variant handlers */
+                    , _react2.default.createElement('div', {
+                      draggable: true,
+                      onDragStart: isTopLevel
+                        ? (e) => handleBuffDragStart(e, buff.id)
+                        : (e) => handleVariantDragStart(e, path),
+                      onDragEnd: isTopLevel ? handleBuffDragEnd : handleVariantDragEnd,
+                      className: "shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none",}
+                      , _react2.default.createElement(_lucidereact.GripVertical, { size: 14,})
+                    )
+
+                    /* Toggle Checkbox - shows checked if active OR remembered */
+                    , _react2.default.createElement('input', {
+                      type: "checkbox",
+                      checked: isActive || isRemembered,
+                      onChange: () => toggleBuffActive(buff.id),
+                      className: `w-4 h-4 rounded border-slate-300 focus:ring-amber-400 cursor-pointer ${
+                        isRemembered ? 'text-slate-400' : 'text-amber-500'
+                      }`,}
+                    )
+
+                    /* Name */
+                    , _react2.default.createElement('div', { className: "flex-1 min-w-0",}
+                      , _react2.default.createElement('input', {
+                        type: "text",
+                        className: "bg-transparent font-semibold text-slate-700 outline-none placeholder:text-slate-400 text-sm w-full",
+                        value: buff.name,
+                        onChange: (e) => updateBuffName(path, e.target.value),
+                        placeholder: "Name",}
+                      )
+                    )
+
+                    /* Delta Preview - neutral color for active buffs, green/red for inactive */
+                    , preview && preview.delta !== 0 && _react2.default.createElement('div', {
+                      className: "flex items-center gap-1 shrink-0 text-xs font-bold tabular-nums",}
+                      , _react2.default.createElement('span', {
+                        className: preview.isActive
+                          ? 'text-slate-500'
+                          : (preview.delta > 0 ? 'text-emerald-600' : 'text-red-500'),}
+                        , preview.delta > 0 ? '+' : ''
+                        , preview.delta.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      )
+                      , _react2.default.createElement('span', {
+                        className: `text-[10px] ${preview.isActive
+                          ? 'text-slate-400'
+                          : (preview.percent > 0 ? 'text-emerald-500' : 'text-red-400')}`,}
+                        , '('
+                        , preview.percent > 0 ? '+' : ''
+                        , preview.percent.toFixed(1)
+                        , '%)'
+                      )
+                    )
+
+                    /* Collapse/Expand Toggle */
+                    , _react2.default.createElement('button', {
+                      onClick: () => toggleBuffCollapsed(buff.id),
+                      className: "p-1 text-slate-300 hover:text-slate-500 rounded transition-colors shrink-0",}
+                      , _react2.default.createElement(isCollapsed ? _lucidereact.ChevronRight : _lucidereact.ChevronDown, { size: 14,})
+                    )
+
+                    /* Delete */
+                    , _react2.default.createElement('button', {
+                      onClick: () => {
+                        if (isTopLevel) {
+                          removeBuff(path[0]);
+                        } else {
+                          removeSubBuff(path);
+                        }
+                      },
+                      className: "p-1 text-slate-300 hover:text-red-500 rounded transition-colors shrink-0",}
+                      , _react2.default.createElement(_lucidereact.X, { size: 14,})
+                    )
+                  )
+
+                  /* ═══ COLLAPSED DESCRIPTION - only show if no preset is selected ═══ */
+                  , (() => {
+                    // Check if any preset is currently selected
+                    const hasPresets = (buff.presets || []).length > 0;
+                    let anyPresetSelected = false;
+
+                    if (hasPresets) {
+                      for (const preset of buff.presets) {
+                        if (isPresetMatchingCurrentState(buff, preset)) {
+                          anyPresetSelected = true;
+                          break;
+                        }
+                      }
+                    }
+
+                    // Only show collapsed description if collapsed, has variant names, AND no preset is selected
+                    return isCollapsed && selectedVariantNames && !anyPresetSelected && _react2.default.createElement('div', {
+                      className: "px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-xs text-slate-500 truncate",}
+                      , selectedVariantNames
+                    );
+                  })()
+
+                  /* ═══ PRESETS ROW - show when collapsed if has presets ═══ */
+                  , isCollapsed && (buff.presets || []).length > 0 && _react2.default.createElement('div', {
+                    className: "flex items-center gap-2 px-3 py-2 bg-slate-50 border-t border-slate-100 flex-wrap",}
+                    , (buff.presets || []).map(preset => {
+                      // Check if this preset matches current state (including multiply values)
+                      const isCurrentPreset = isPresetMatchingCurrentState(buff, preset);
+
+                      const presetKey = `${buff.id}:preset:${preset.id}`;
+                      const presetPreview = presetPreviews[presetKey];
+                      const dragKey = `${path.join(',')}:${preset.id}`;
+                      const isDraggingThis = draggingBuffPreset && draggingBuffPreset.presetId === preset.id &&
+                        draggingBuffPreset.buffPath.join(',') === path.join(',');
+                      const isDragOverThis = dragOverBuffPresetKey === dragKey;
+
+                      return _react2.default.createElement('div', {
+                        key: preset.id,
+                        onDragOver: (e) => handleBuffPresetDragOver(e, path, preset.id),
+                        onDragLeave: handleBuffPresetDragLeave,
+                        onDrop: (e) => handleBuffPresetDrop(e, path, preset.id),
+                        className: `group flex items-center gap-1 px-2 py-1 rounded text-xs border transition-all ${
+                          isDraggingThis ? 'opacity-50' : ''
+                        } ${
+                          isDragOverThis ? 'ring-2 ring-violet-400' : ''
+                        } ${
+                          isCurrentPreset
+                            ? 'bg-violet-100 border-violet-300 text-violet-700'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50 cursor-pointer'
+                        }`,
+                        onClick: () => !isCurrentPreset && applyPreset(path, preset),}
+                        , _react2.default.createElement('div', {
+                          draggable: true,
+                          onDragStart: (e) => handleBuffPresetDragStart(e, path, preset.id),
+                          onDragEnd: handleBuffPresetDragEnd,
+                          className: "shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none",
+                          onClick: (e) => e.stopPropagation(),}
+                          , _react2.default.createElement(_lucidereact.GripVertical, { size: 10,})
+                        )
+                        , _react2.default.createElement('span', {
+                            contentEditable: isCurrentPreset,
+                            suppressContentEditableWarning: true,
+                            onBlur: isCurrentPreset ? (e) => updatePresetName(path, preset.id, e.target.textContent) : undefined,
+                            onKeyDown: isCurrentPreset ? (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } } : undefined,
+                            onClick: isCurrentPreset ? (e) => e.stopPropagation() : undefined,
+                            className: `font-medium outline-none ${isCurrentPreset ? 'cursor-text' : ''}`,}
+                          , preset.name
+                        )
+                        , !isCurrentPreset && presetPreview && presetPreview.percent !== 0 && _react2.default.createElement('span', {
+                            className: `text-[10px] font-bold ${presetPreview.percent > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
+                          , presetPreview.percent > 0 ? '+' : ''
+                          , presetPreview.percent.toFixed(0)
+                          , '%'
+                        )
+                        , _react2.default.createElement('button', {
+                          onClick: (e) => { e.stopPropagation(); removePreset(path, preset.id); },
+                          className: "text-slate-400 hover:text-red-500 ml-1 shrink-0",}
+                          , _react2.default.createElement(_lucidereact.X, { size: 10,})
+                        )
+                      );
+                    })
+                  )
+
+                  /* ═══ MODS ═══ (hidden when collapsed) */
+                  , !isCollapsed && _react2.default.createElement('div', { className: "flex border-t border-slate-100",}
+                    /* Multiply field - left side of mods */
+                    , _react2.default.createElement('div', {
+                      className: `flex items-center justify-center shrink-0 bg-slate-50 border-r border-slate-100 ${(buff.multiply || 1) === 1 ? 'px-1.5' : 'px-2'}`,
+                      onClick: (e) => e.stopPropagation(),}
+                      , (buff.multiply || 1) === 1
+                        ? _react2.default.createElement('span', {
+                            className: "text-slate-300 text-xs font-mono cursor-pointer hover:text-slate-500 select-none",
+                            onClick: () => updateBuffAtPath(path, node => ({ ...node, multiply: 2 })),
+                            title: "Multiplier (click to edit)",}
+                            , "×1"
+                          )
+                        : _react2.default.createElement('div', { className: "flex items-center gap-0.5",}
+                            , _react2.default.createElement('span', { className: "text-amber-500 text-xs font-medium",}, "×")
+                            , _react2.default.createElement('input', {
+                                type: "number",
+                                step: "1",
+                                min: "1",
+                                className: "w-8 bg-white border border-amber-300 rounded px-1 py-0.5 text-xs font-mono outline-none focus:border-amber-400 text-center text-amber-600",
+                                value: buff.multiply || 1,
+                                onChange: (e) => updateBuffAtPath(path, node => ({ ...node, multiply: parseFloat(e.target.value) || 1 })),
+                                onWheel: (e) => e.target.blur(),}
+                            )
+                          )
+                    )
+                    /* Mods content */
+                    , _react2.default.createElement('div', { className: "flex-1 px-3 py-2 bg-white",}
+                    , buff.mods.length > 0 && _react2.default.createElement('div', { className: "space-y-1.5 mb-2",}
+                      , buff.mods.map((mod, mIndex) => (
+                        _react2.default.createElement('div', { key: mod.id, className: "flex items-center gap-2",}
+                          /* Target */
+                          , _react2.default.createElement('select', {
+                            className: "bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-indigo-700 outline-none focus:border-amber-400",
+                            style: { minWidth: '80px' },
+                            value: mod.targetVar,
+                            onChange: (e) => updateMod(path, mIndex, 'targetVar', e.target.value),}
+                            , _react2.default.createElement('option', { value: "", disabled: true,}, "Target")
+                            , allValidTargets.map(name => _react2.default.createElement('option', { key: name, value: name,}, name))
+                          )
+                          /* Type Toggle */
+                          , _react2.default.createElement('div', { className: "flex bg-slate-100 rounded border border-slate-200 p-0.5",}
+                            , _react2.default.createElement('button', {
+                              className: `px-1.5 py-0.5 rounded text-xs font-medium ${mod.type === 'mult' ? 'bg-white shadow text-amber-600' : 'text-slate-400'}`,
+                              onClick: () => updateMod(path, mIndex, 'type', 'mult'),}
+                              , "%"
+                            )
+                            , _react2.default.createElement('button', {
+                              className: `px-1.5 py-0.5 rounded text-xs font-medium ${mod.type === 'flat' ? 'bg-white shadow text-amber-600' : 'text-slate-400'}`,
+                              onClick: () => updateMod(path, mIndex, 'type', 'flat'),}
+                              , "#"
+                            )
+                          )
+                          /* Value */
+                          , _react2.default.createElement('input', {
+                            type: "number",
+                            step: mod.type === 'mult' ? "0.01" : "1",
+                            className: "w-20 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-mono outline-none focus:border-amber-400",
+                            value: mod.value,
+                            onChange: (e) => updateMod(path, mIndex, 'value', e.target.value),
+                            onWheel: (e) => e.target.blur(),}
+                          )
+                          /* Delete */
+                          , _react2.default.createElement('button', {
+                            onClick: () => removeMod(path, mIndex),
+                            className: "p-1 text-slate-300 hover:text-red-400 rounded ml-auto",}
+                            , _react2.default.createElement(_lucidereact.X, { size: 12,})
+                          )
+                        )
+                      ))
+                    )
+                    /* Add Mod, Add Variant, Add Preset Buttons */
+                    , _react2.default.createElement('div', { className: "flex items-center gap-3 flex-wrap",}
+                      , _react2.default.createElement('button', {
+                        onClick: () => addModToBuff(path),
+                        className: "text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1",}
+                        , _react2.default.createElement(_lucidereact.Plus, { size: 12,}), "Add Mod"
+                      )
+                      , _react2.default.createElement('button', {
+                        onClick: () => openVariantPicker(path),
+                        className: "text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1",}
+                        , _react2.default.createElement(_lucidereact.Plus, { size: 12,}), "Add Variant"
+                      )
+                      , hasSubBuffs && _react2.default.createElement('button', {
+                        onClick: () => addPreset(path),
+                        className: "text-xs text-violet-600 hover:text-violet-700 font-medium flex items-center gap-1",}
+                        , _react2.default.createElement(_lucidereact.Bookmark, { size: 12,}), "Save As Preset"
+                      )
+                    )
+
+                    /* Presets Row - horizontal list (when not collapsed) */
+                    , (buff.presets || []).length > 0 && _react2.default.createElement('div', {
+                      className: "flex items-center gap-2 mt-2 flex-wrap",}
+                      , (buff.presets || []).map(preset => {
+                        // Check if this preset matches current state (including multiply values)
+                        const isCurrentPreset = isPresetMatchingCurrentState(buff, preset);
+
+                        const presetKey = `${buff.id}:preset:${preset.id}`;
+                        const presetPreview = presetPreviews[presetKey];
+                        const dragKey = `${path.join(',')}:${preset.id}`;
+                        const isDraggingThis = draggingBuffPreset && draggingBuffPreset.presetId === preset.id &&
+                          draggingBuffPreset.buffPath.join(',') === path.join(',');
+                        const isDragOverThis = dragOverBuffPresetKey === dragKey;
+
+                        return _react2.default.createElement('div', {
+                          key: preset.id,
+                          onDragOver: (e) => handleBuffPresetDragOver(e, path, preset.id),
+                          onDragLeave: handleBuffPresetDragLeave,
+                          onDrop: (e) => handleBuffPresetDrop(e, path, preset.id),
+                          className: `group flex items-center gap-1 px-2 py-1 rounded text-xs border transition-all ${
+                            isDraggingThis ? 'opacity-50' : ''
+                          } ${
+                            isDragOverThis ? 'ring-2 ring-violet-400' : ''
+                          } ${
+                            isCurrentPreset
+                              ? 'bg-violet-100 border-violet-300 text-violet-700'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50 cursor-pointer'
+                          }`,
+                          onClick: () => !isCurrentPreset && applyPreset(path, preset),}
+                          , _react2.default.createElement('div', {
+                            draggable: true,
+                            onDragStart: (e) => handleBuffPresetDragStart(e, path, preset.id),
+                            onDragEnd: handleBuffPresetDragEnd,
+                            className: "shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none",
+                            onClick: (e) => e.stopPropagation(),}
+                            , _react2.default.createElement(_lucidereact.GripVertical, { size: 10,})
+                          )
+                          , _react2.default.createElement('span', {
+                              contentEditable: isCurrentPreset,
+                              suppressContentEditableWarning: true,
+                              onBlur: isCurrentPreset ? (e) => updatePresetName(path, preset.id, e.target.textContent) : undefined,
+                              onKeyDown: isCurrentPreset ? (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } } : undefined,
+                              onClick: isCurrentPreset ? (e) => e.stopPropagation() : undefined,
+                              className: `font-medium outline-none ${isCurrentPreset ? 'cursor-text' : ''}`,}
+                            , preset.name
+                          )
+                          , !isCurrentPreset && presetPreview && presetPreview.percent !== 0 && _react2.default.createElement('span', {
+                              className: `text-[10px] font-bold ${presetPreview.percent > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
+                            , presetPreview.percent > 0 ? '+' : ''
+                            , presetPreview.percent.toFixed(0)
+                            , '%'
+                          )
+                          , _react2.default.createElement('button', {
+                            onClick: (e) => { e.stopPropagation(); removePreset(path, preset.id); },
+                            className: "text-slate-400 hover:text-red-500 ml-1 shrink-0",}
+                            , _react2.default.createElement(_lucidereact.X, { size: 10,})
+                          )
+                        );
+                      })
+                    )
+                  ) /* end Mods content div */
+                  ) /* end flex container with multiply */
+
+                  /* ═══ VARIANTS (NESTED) - Only show if has variants and not collapsed ═══ */
+                  , !isCollapsed && hasSubBuffs && _react2.default.createElement('div', { className: "bg-slate-50 border-t border-slate-200 px-3 py-2 space-y-2",}
+                    , (buff.subBuffs || []).map((subBuff, sbIndex) => {
+                      const variantPath = [...path, sbIndex];
+                      const isDraggingThis = draggingVariant && draggingVariant.path.join(',') === variantPath.join(',');
+                      const isDragOverThis = dragOverVariantPath && dragOverVariantPath.join(',') === variantPath.join(',');
+                      return _react2.default.createElement('div', {
+                        key: subBuff.id,
+                        onDragOver: (e) => handleVariantDragOver(e, variantPath),
+                        onDragLeave: handleVariantDragLeave,
+                        onDrop: (e) => handleVariantDrop(e, variantPath),
+                        className: `${isDraggingThis ? 'opacity-50' : ''} ${isDragOverThis ? 'ring-2 ring-violet-300 rounded-lg' : ''}`,}
+                        , renderBuffNode(subBuff, variantPath, depth + 1, isActive)
+                      );
+                    })
+                  )
+                );
+              };
+
+              // Render all top-level buffs
+              return buffs.map((buff, bIndex) => (
                 _react2.default.createElement('div', {
                   key: buff.id,
                   onDragOver: (e) => handleBuffDragOver(e, buff.id),
                   onDragLeave: handleBuffDragLeave,
                   onDrop: (e) => handleBuffDrop(e, buff.id),
-                  className: `rounded-lg border transition-all ${
-                    draggingBuffId === buff.id ? 'opacity-50' : ''
-                  } ${
-                    dragOverBuffId === buff.id ? 'border-amber-500 ring-2 ring-amber-200' : ''
-                  } ${isActive ? 'bg-amber-50 border-amber-200 shadow-sm' : 'bg-white border-slate-200'}`,}
-                  , _react2.default.createElement('div', { className: "p-3 flex items-center gap-3 border-b border-slate-100/50"     ,}
-                    , _react2.default.createElement('div', {
-                        draggable: true,
-                        onDragStart: (e) => handleBuffDragStart(e, buff.id),
-                        onDragEnd: handleBuffDragEnd,
-                        className: "shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"    ,}
-                        , _react2.default.createElement(_lucidereact.GripVertical, { size: 16,} )
-                    )
-                    , _react2.default.createElement('input', { type: "checkbox", checked: isActive, onChange: () => toggleBuff(buff.id), className: "w-4 h-4 text-amber-600 rounded focus:ring-amber-500 border-gray-300 cursor-pointer"      ,} )
-
-                    , _react2.default.createElement('div', { className: "flex-1 flex flex-col"  ,}
-                      , _react2.default.createElement('input', { type: "text", className: "bg-transparent font-bold text-slate-700 outline-none placeholder:text-slate-400 text-sm"     , value: buff.name, onChange: (e) => updateBuffName(bIndex, e.target.value), placeholder: "Buff Name" ,} )
-
-                      /* Preview Logic */
-                      , _react2.default.createElement('div', { className: "flex items-center gap-2 mt-1 text-xs h-4"     ,}
-                        , isCalculatingHypotheticals ? (
-                            _react2.default.createElement('div', { className: "flex items-center gap-1 text-slate-400"   ,}
-                                , _react2.default.createElement(_lucidereact.Loader2, { size: 10, className: "animate-spin",} )
-                                , _react2.default.createElement('span', null, "Calculating impact..." )
-                            )
-                        ) : (
-                            _react2.default.createElement(_react2.default.Fragment, null
-                                , preview && preview.delta !== 0 && (
-                                    _react2.default.createElement(_react2.default.Fragment, null
-                                        , _react2.default.createElement('span', { className: "text-slate-400",}
-                                                , isActive ? "If removed:" : "If added:"
-                                        )
-
-                                            , _react2.default.createElement('span', { className: `flex items-center gap-0.5 font-bold ${preview.delta > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
-                                            , preview.delta > 0 ? _react2.default.createElement(_lucidereact.TrendingUp, { size: 10,} ) : _react2.default.createElement(_lucidereact.TrendingDown, { size: 10,} )
-                                            , preview.delta > 0 ? '+' : '', preview.delta.toLocaleString(undefined, { maximumFractionDigits: 1 })
-                                            , _react2.default.createElement('span', { className: "ml-1 opacity-80" ,}, "("
-                                                , preview.percent > 0 ? '+' : '', preview.percent.toLocaleString(undefined, { maximumFractionDigits: 1 }), "%)"
-                                            )
-                                            )
-                                    )
-                                )
-                                , preview && preview.delta === 0 && (
-                                    _react2.default.createElement('span', { className: "text-slate-400 italic" ,}, "No impact on "   , _optionalChain([activeRowObj, 'optionalAccess', _29 => _29.name]))
-                                )
-                            )
-                        )
-                      )
-                    )
-
-                    , _react2.default.createElement('button', { onClick: () => removeBuff(bIndex), className: "text-slate-400 hover:text-red-500" ,}, _react2.default.createElement(_lucidereact.X, { size: 14,} ))
-                  )
-
-                  /* Mod List */
-                  , _react2.default.createElement('div', { className: "p-3 space-y-2 bg-slate-50/50"  ,}
-                    , buff.mods.map((mod, mIndex) => (
-                      _react2.default.createElement('div', { key: mod.id, className: "flex items-center gap-2 text-sm"   ,}
-                        , _react2.default.createElement('select', { className: "bg-white border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-indigo-700 outline-none focus:border-indigo-400 w-24"           , value: mod.targetVar, onChange: (e) => updateMod(bIndex, mIndex, 'targetVar', e.target.value),}
-                          , _react2.default.createElement('option', { value: "", disabled: true,}, "Target...")
-                          , allValidTargets.map(name => _react2.default.createElement('option', { key: name, value: name,}, name))
-                        )
-                        , _react2.default.createElement('div', { className: "flex bg-slate-100 rounded border border-slate-200 p-0.5"     ,}
-                          , _react2.default.createElement('button', { className: `p-1 rounded ${mod.type === 'mult' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`, onClick: () => updateMod(bIndex, mIndex, 'type', 'mult'), title: "Multiplier",}, _react2.default.createElement(_lucidereact.Percent, { size: 12,} ))
-                          , _react2.default.createElement('button', { className: `p-1 rounded ${mod.type === 'flat' ? 'bg-white shadow text-slate-800' : 'text-slate-400'}`, onClick: () => updateMod(bIndex, mIndex, 'type', 'flat'), title: "Flat Value" ,}, _react2.default.createElement(_lucidereact.Hash, { size: 12,} ))
-                        )
-                        , _react2.default.createElement('input', { type: "number", step: mod.type === 'mult' ? "0.1" : "1", className: "w-16 bg-white border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-amber-400"         , value: mod.value, onChange: (e) => updateMod(bIndex, mIndex, 'value', e.target.value),} )
-                        , _react2.default.createElement('button', { onClick: () => removeMod(bIndex, mIndex), className: "text-slate-300 hover:text-red-400 ml-auto"  ,}, _react2.default.createElement(_lucidereact.Trash2, { size: 12,} ))
-                      )
-                    ))
-                    , _react2.default.createElement('button', { onClick: () => addModToBuff(bIndex), className: "text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-2"       ,}, _react2.default.createElement(_lucidereact.Plus, { size: 12,} ), " Add Modification"  )
-                  )
+                  className: `${draggingBuffId === buff.id ? 'opacity-50' : ''} ${dragOverBuffId === buff.id ? 'ring-2 ring-amber-300' : ''}`,}
+                  , renderBuffNode(buff, [bIndex], 0, true)
                 )
-              );
-            })
-            , _react2.default.createElement('button', { onClick: addBuff, className: "w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-all flex justify-center items-center gap-2 font-medium text-sm"                ,}
-              , _react2.default.createElement(_lucidereact.Plus, { size: 14,} ), " Create New Buff"
+              ));
+            })()
+
+            /* Add New Buff Button */
+            , _react2.default.createElement('button', {
+              onClick: addBuff,
+              className: "w-full py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-all flex justify-center items-center gap-2 font-medium text-sm",}
+              , _react2.default.createElement(_lucidereact.Plus, { size: 16,}), "Create New Buff"
             )
           )
         )
@@ -1501,8 +2824,12 @@ const getInitialState = () => {
 
                   , _react2.default.createElement('br', null), "2. Hover between rows to "
                        , _react2.default.createElement('span', { className: "font-bold",}, _react2.default.createElement(_lucidereact.Plus, { size: 10, className: "inline",}), " Insert" ), " new variables in the middle of the chain."
-                  , _react2.default.createElement('br', null), "3. Use the "
-                     , _react2.default.createElement('span', { className: "font-bold",}, "Saved Sets" ), " panel to manage buff configurations. The green/red numbers show how your result would change if you loaded that set."
+                  , _react2.default.createElement('br', null), "3. Use "
+                     , _react2.default.createElement('span', { className: "font-bold text-violet-600",}, "Variants" ), " within buffs to create toggleable sub-configurations (e.g., \"Support\" buff with \"Weapon A\" and \"Weapon B\" variants)."
+                  , _react2.default.createElement('br', null), "4. Use "
+                     , _react2.default.createElement('span', { className: "font-bold text-amber-600",}, "Presets" ), " within buffs to save and quickly switch between variant configurations."
+                  , _react2.default.createElement('br', null), "5. Use "
+                     , _react2.default.createElement('span', { className: "font-bold text-indigo-600",}, "Workspaces" ), " to save complete snapshots of your work and switch between different calculation setups."
                 )
               )
             )
@@ -1513,13 +2840,20 @@ const getInitialState = () => {
     )
   );
 } exports.default = UnifiedFormulaBuilder;
-</script></head>
+</script>
+<style>
+/* Hide number input spinners */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+</style>
+</head>
   <body>
   
 
 <div id="preview-app"></div></body></html>
-
-
-
-
-
