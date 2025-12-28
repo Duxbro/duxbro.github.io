@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta name="x-poe-datastore-behavior" content="local_only"><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;"><meta http-equiv="x-dns-prefetch-control" content="off"><script src="https://puc.poecdn.net/authenticated_preview_page/standard.3ef2c256959faf5a756d.js"></script>
     <meta charset="utf-8">
-    <title>Dynamic Variable Analysis</title>
+    <title>Poe</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://puc.poecdn.net/authenticated_preview_page/disableWebRTC.9710cebe07429a9e8e06.js"></script><meta name="x-poe-allow-downloads" content="true"><meta name="x-poe-datastore-behavior" content="disabled"><script src="https://puc.poecdn.net/authenticated_preview_page/tw.b9024aecac666455e183.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/deps.faccd16000d314dc16d5.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/exports.b0f0f482cdeb5302b0b9.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/renderer.75c73ae6b4235f62945a.js"></script><script>Object.defineProperty(exports, "__esModule", {value: true}); function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }var _react = require('react'); var _react2 = _interopRequireDefault(_react);
 var _lucidereact = require('lucide-react');
@@ -541,7 +541,7 @@ const parseImportData = (data) => {
 
 // Helper to create export data format (used by export, saveAsWorkspace, and auto-save)
 // Deep clones all data to avoid reference issues
-const createExportData = (rows, rootBuff, activeTargetId, workspaces) => {
+const createExportData = (rows, rootBuff, activeTargetId, workspaces, currentWorkspaceId) => {
   const data = {
     version: 5,
     rows: deepClone(rows),
@@ -552,6 +552,10 @@ const createExportData = (rows, rootBuff, activeTargetId, workspaces) => {
   // Note: workspaces are not cloned here since they are already separate snapshots
   if (workspaces && workspaces.length > 0) {
     data.workspaces = workspaces;
+  }
+  // Store currently selected workspace ID
+  if (currentWorkspaceId) {
+    data.currentWorkspaceId = currentWorkspaceId;
   }
   return data;
 };
@@ -565,7 +569,8 @@ const getInitialState = () => {
       const parsed = parseImportData(saved);
       return {
         ...parsed,
-        workspaces: saved.workspaces || []
+        workspaces: saved.workspaces || [],
+        currentWorkspaceId: saved.currentWorkspaceId || null
       };
     } catch (e) {
       console.log('Failed to parse saved state:', e);
@@ -600,7 +605,8 @@ const getInitialState = () => {
       subBuffs: defaultTopLevelBuffs,
       presets: defaultRootPresets
     },
-    workspaces: []
+    workspaces: [],
+    currentWorkspaceId: null
   };
 };
 
@@ -663,6 +669,9 @@ const getInitialState = () => {
   // Workspace state - loaded from main storage
   const [workspaces, setWorkspaces] = _react.useState.call(void 0, initialState.workspaces);
   const [confirmingWorkspaceAction, setConfirmingWorkspaceAction] = _react.useState.call(void 0, null); // { id, action: 'load' | 'delete' }
+  const [currentWorkspaceId, setCurrentWorkspaceId] = _react.useState.call(void 0, initialState.currentWorkspaceId);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = _react.useState.call(void 0, false);
+  const isFirstRender = _react.useRef.call(void 0, true);
 
   // Preset editing state - for root presets (Saved Builds)
   // { id: string, originalSnapshot: { activeIds: [], multiplyValues: {} } } | null
@@ -671,9 +680,22 @@ const getInitialState = () => {
   // Auto-save to localStorage when state changes (including workspaces)
   _react.useEffect.call(void 0, () => {
     if (storageAvailable) {
-      saveToStorage(createExportData(rows, rootBuff, activeTargetId, workspaces));
+      saveToStorage(createExportData(rows, rootBuff, activeTargetId, workspaces, currentWorkspaceId));
     }
-  }, [rows, rootBuff, activeTargetId, workspaces]);
+  }, [rows, rootBuff, activeTargetId, workspaces, currentWorkspaceId]);
+
+  // Detect changes after loading a workspace (for sticky save footer)
+  _react.useEffect.call(void 0, () => {
+    // Skip first render to avoid false positive on initial load
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    // Only mark as unsaved if we have a current workspace loaded and changes detected
+    if (currentWorkspaceId && !hasUnsavedChanges) {
+      setHasUnsavedChanges(true);
+    }
+  }, [rows, rootBuff, activeTargetId]);
 
   // Drag and drop state
   const [draggingBuffSetId, setDraggingBuffSetId] = _react.useState.call(void 0, null);
@@ -1165,6 +1187,10 @@ const getInitialState = () => {
         setRows(parsed.rows);
         setRootBuff(parsed.rootBuff);
         setActiveTargetId(parsed.activeTargetId);
+        // Set current workspace ID and reset unsaved flag
+        setCurrentWorkspaceId(workspace.id);
+        setHasUnsavedChanges(false);
+        isFirstRender.current = true; // Reset to prevent immediate dirty flag
       } catch (err) {
         setImportError("Failed to load workspace: " + err.message);
       } finally {
@@ -1186,6 +1212,11 @@ const getInitialState = () => {
     // Just update state - auto-save effect will persist to storage
     setWorkspaces(workspaces.filter(ws => ws.id !== workspaceId));
     setConfirmingWorkspaceAction(null);
+    // Clear current workspace if deleting the active one
+    if (workspaceId === currentWorkspaceId) {
+      setCurrentWorkspaceId(null);
+      setHasUnsavedChanges(false);
+    }
   };
 
   // Save current config to an existing workspace (overwrite)
@@ -1203,6 +1234,10 @@ const getInitialState = () => {
       return ws;
     }));
     setConfirmingWorkspaceAction(null);
+    // If saving to the current workspace, reset unsaved flag
+    if (workspaceId === currentWorkspaceId) {
+      setHasUnsavedChanges(false);
+    }
   };
 
   // Handle workspace action click (load/delete/save) with confirmation
@@ -1739,8 +1774,8 @@ const getInitialState = () => {
   // --- Import / Export Handlers ---
 
   const handleExport = () => {
-    // Export using shared format (includes workspaces if any)
-    const data = createExportData(rows, rootBuff, activeTargetId, workspaces);
+    // Export using shared format (includes workspaces and currentWorkspaceId if any)
+    const data = createExportData(rows, rootBuff, activeTargetId, workspaces, currentWorkspaceId);
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1783,6 +1818,16 @@ const getInitialState = () => {
                   setWorkspaces(data.workspaces);
                 }
 
+                // Import currentWorkspaceId if present
+                if (data.currentWorkspaceId) {
+                  setCurrentWorkspaceId(data.currentWorkspaceId);
+                  setHasUnsavedChanges(false);
+                  isFirstRender.current = true;
+                } else {
+                  setCurrentWorkspaceId(null);
+                  setHasUnsavedChanges(false);
+                }
+
             } catch (err) {
                 setImportError("Failed to import JSON: " + err.message);
             } finally {
@@ -1802,7 +1847,7 @@ const getInitialState = () => {
   const allValidTargets = rows.map(i => i.name).filter(Boolean);
 
   return (
-    _react2.default.createElement('div', { className: "max-w-7xl mx-auto p-6 bg-slate-50 min-h-screen font-sans text-slate-800 relative"       ,}
+    _react2.default.createElement('div', { className: `max-w-7xl mx-auto p-6 bg-slate-50 min-h-screen font-sans text-slate-800 relative ${hasUnsavedChanges && currentWorkspaceId ? 'pb-20' : ''}`,}
 
       /* Loading Overlay */
       , isLoading && (
@@ -2028,79 +2073,87 @@ const getInitialState = () => {
                     const isConfirmingDelete = confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspace.id && confirmingWorkspaceAction.action === 'delete';
                     const isConfirmingSave = confirmingWorkspaceAction && confirmingWorkspaceAction.id === workspace.id && confirmingWorkspaceAction.action === 'save';
                     const isConfirmingAny = isConfirmingLoad || isConfirmingDelete || isConfirmingSave;
+                    const isCurrentWorkspace = workspace.id === currentWorkspaceId;
 
                     return _react2.default.createElement('div', {
                         key: workspace.id,
-                        className: `group flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-all border-2 ${isConfirmingAny ? 'bg-white border-slate-300 shadow-sm' : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 hover:shadow-sm'}`,}
+                        onClick: () => handleWorkspaceActionClick(workspace.id, 'load'),
+                        className: `group flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-all border-2 cursor-pointer ${
+                          isCurrentWorkspace
+                            ? 'bg-indigo-50 border-indigo-400 shadow-sm ring-2 ring-indigo-200'
+                            : isConfirmingAny
+                              ? 'bg-white border-slate-300 shadow-sm'
+                              : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 hover:shadow-sm'
+                        }`,}
 
-                        , _react2.default.createElement(_lucidereact.FileText, { size: 14, className: "shrink-0 text-slate-400"   ,} )
+                        , _react2.default.createElement(_lucidereact.FileText, { size: 14, className: `shrink-0 ${isCurrentWorkspace ? 'text-indigo-500' : 'text-slate-400'}`,} )
                         , _react2.default.createElement('div', { className: "flex flex-col min-w-0"   ,}
                             , _react2.default.createElement('input', {
                                 type: "text",
                                 value: workspace.name,
                                 onChange: (e) => updateWorkspaceName(workspace.id, e.target.value),
-                                onFocus: cancelWorkspaceActionConfirm,
-                                className: "font-bold bg-transparent outline-none text-xs text-slate-600 cursor-text focus:bg-white focus:border focus:border-indigo-400 focus:rounded focus:px-1"            ,
+                                onClick: (e) => e.stopPropagation(),
+                                onFocus: (e) => { e.stopPropagation(); cancelWorkspaceActionConfirm(); },
+                                className: `font-bold bg-transparent outline-none text-xs cursor-text focus:bg-white focus:border focus:border-indigo-400 focus:rounded focus:px-1 ${isCurrentWorkspace ? 'text-indigo-700' : 'text-slate-600'}`,
                                 placeholder: "Workspace Name",}
                             )
-                            , _react2.default.createElement('div', { className: "flex items-center gap-1 text-[10px] text-slate-400"     ,}
+                            , _react2.default.createElement('div', { className: `flex items-center gap-1 text-[10px] ${isCurrentWorkspace ? 'text-indigo-400' : 'text-slate-400'}`,}
+                                , isCurrentWorkspace && _react2.default.createElement('span', { className: "font-semibold text-indigo-500",}, "Active")
+                                , isCurrentWorkspace && _react2.default.createElement('span', null, "·")
                                 , _react2.default.createElement('span', null, workspace.rows ? workspace.rows.length : 0, " rows"  )
                                 , savedDateTime && _react2.default.createElement('span', null, "· ", savedDateTime)
                             )
                         )
 
-                        , _react2.default.createElement('div', { className: "flex items-center gap-0.5 ml-1"   ,}
-                            /* Load button / Load? confirm button */
-                            , isConfirmingLoad ? (
-                                _react2.default.createElement('button', {
-                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'load'),
-                                    className: "px-2 py-1 text-white bg-indigo-500 hover:bg-indigo-600 rounded text-[10px] font-bold transition-colors"       ,}
-                                    , "Load?"
+                        , _react2.default.createElement('div', { className: "flex items-center gap-1 ml-1", onClick: (e) => e.stopPropagation(),}
+                            /* When confirming, only show the confirm button and cancel button */
+                            , isConfirmingAny ? (
+                                _react2.default.createElement(_react2.default.Fragment, null
+                                    /* Confirm button */
+                                    , isConfirmingLoad && _react2.default.createElement('button', {
+                                        onClick: (e) => { e.stopPropagation(); handleWorkspaceActionClick(workspace.id, 'load'); },
+                                        className: "px-2 py-1 text-white bg-indigo-500 hover:bg-indigo-600 rounded text-[10px] font-bold transition-colors",}
+                                        , "Load?"
+                                    )
+                                    , isConfirmingSave && _react2.default.createElement('button', {
+                                        onClick: (e) => { e.stopPropagation(); handleWorkspaceActionClick(workspace.id, 'save'); },
+                                        className: "px-2 py-1 text-white bg-emerald-500 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors",}
+                                        , "Save?"
+                                    )
+                                    , isConfirmingDelete && _react2.default.createElement('button', {
+                                        onClick: (e) => { e.stopPropagation(); handleWorkspaceActionClick(workspace.id, 'delete'); },
+                                        className: "px-2 py-1 text-white bg-red-500 hover:bg-red-600 rounded text-[10px] font-bold transition-colors",}
+                                        , "Delete?"
+                                    )
+                                    /* Cancel button - same style as confirm but slate color */
+                                    , _react2.default.createElement('button', {
+                                        onClick: (e) => { e.stopPropagation(); cancelWorkspaceActionConfirm(); },
+                                        className: "px-2 py-1 text-white bg-slate-400 hover:bg-slate-500 rounded text-[10px] font-bold transition-colors",}
+                                        , "Cancel"
+                                    )
                                 )
                             ) : (
-                                _react2.default.createElement('button', {
-                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'load'),
-                                    className: "p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"     ,
-                                    title: "Load workspace" ,}
-                                    , _react2.default.createElement(_lucidereact.Upload, { size: 12,} )
+                                /* Normal state - show all action buttons */
+                                _react2.default.createElement(_react2.default.Fragment, null
+                                    , _react2.default.createElement('button', {
+                                        onClick: (e) => { e.stopPropagation(); handleWorkspaceActionClick(workspace.id, 'load'); },
+                                        className: "p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors",
+                                        title: "Load workspace",}
+                                        , _react2.default.createElement(_lucidereact.Upload, { size: 12,} )
+                                    )
+                                    , _react2.default.createElement('button', {
+                                        onClick: (e) => { e.stopPropagation(); handleWorkspaceActionClick(workspace.id, 'save'); },
+                                        className: "p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors",
+                                        title: "Save current config to workspace",}
+                                        , _react2.default.createElement(_lucidereact.Download, { size: 12,} )
+                                    )
+                                    , _react2.default.createElement('button', {
+                                        onClick: (e) => { e.stopPropagation(); handleWorkspaceActionClick(workspace.id, 'delete'); },
+                                        className: "p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors",
+                                        title: "Delete workspace",}
+                                        , _react2.default.createElement(_lucidereact.Trash2, { size: 12,} )
+                                    )
                                 )
-                            )
-                            /* Save button / Save? confirm button */
-                            , isConfirmingSave ? (
-                                _react2.default.createElement('button', {
-                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'save'),
-                                    className: "px-2 py-1 text-white bg-emerald-500 hover:bg-emerald-600 rounded text-[10px] font-bold transition-colors"       ,}
-                                    , "Save?"
-                                )
-                            ) : (
-                                _react2.default.createElement('button', {
-                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'save'),
-                                    className: "p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"     ,
-                                    title: "Save current config to workspace" ,}
-                                    , _react2.default.createElement(_lucidereact.Download, { size: 12,} )
-                                )
-                            )
-                            /* Delete button / Delete? confirm button */
-                            , isConfirmingDelete ? (
-                                _react2.default.createElement('button', {
-                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'delete'),
-                                    className: "px-2 py-1 text-white bg-red-500 hover:bg-red-600 rounded text-[10px] font-bold transition-colors"       ,}
-                                    , "Delete?"
-                                )
-                            ) : (
-                                _react2.default.createElement('button', {
-                                    onClick: () => handleWorkspaceActionClick(workspace.id, 'delete'),
-                                    className: "p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"     ,
-                                    title: "Delete workspace" ,}
-                                    , _react2.default.createElement(_lucidereact.Trash2, { size: 12,} )
-                                )
-                            )
-                            /* Cancel button when confirming */
-                            , isConfirmingAny && _react2.default.createElement('button', {
-                                onClick: cancelWorkspaceActionConfirm,
-                                className: "p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"     ,
-                                title: "Cancel",}
-                                , _react2.default.createElement(_lucidereact.X, { size: 12,} )
                             )
                         )
                     );
@@ -2872,6 +2925,40 @@ const getInitialState = () => {
         )
 
       )
+
+      /* Sticky Save Footer - appears when there are unsaved changes to current workspace */
+      , hasUnsavedChanges && currentWorkspaceId && (() => {
+        const currentWorkspace = workspaces.find(ws => ws.id === currentWorkspaceId);
+        return currentWorkspace && _react2.default.createElement('div', {
+          className: "fixed bottom-0 left-0 right-0 z-40 bg-gradient-to-r from-indigo-600 to-indigo-700 shadow-lg border-t border-indigo-500 animate-in slide-in-from-bottom duration-300"
+        },
+          _react2.default.createElement('div', { className: "max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4" },
+            _react2.default.createElement('div', { className: "flex items-center gap-3 text-white" },
+              _react2.default.createElement(_lucidereact.AlertCircle, { size: 18, className: "text-indigo-200" }),
+              _react2.default.createElement('div', null,
+                _react2.default.createElement('span', { className: "font-semibold" }, "Unsaved changes"),
+                _react2.default.createElement('span', { className: "text-indigo-200 ml-2" }, "to \"", currentWorkspace.name, "\"")
+              )
+            ),
+            _react2.default.createElement('div', { className: "flex items-center gap-2" },
+              _react2.default.createElement('button', {
+                onClick: () => {
+                  setHasUnsavedChanges(false);
+                  setCurrentWorkspaceId(null);
+                },
+                className: "px-4 py-2 text-indigo-200 hover:text-white hover:bg-indigo-500 rounded-lg transition-colors text-sm font-medium"
+              }, "Dismiss"),
+              _react2.default.createElement('button', {
+                onClick: () => saveToWorkspace(currentWorkspaceId),
+                className: "px-4 py-2 bg-white text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors text-sm font-bold flex items-center gap-2 shadow-sm"
+              },
+                _react2.default.createElement(_lucidereact.Download, { size: 14 }),
+                "Save to Workspace"
+              )
+            )
+          )
+        );
+      })()
     )
   );
 } exports.default = UnifiedFormulaBuilder;
