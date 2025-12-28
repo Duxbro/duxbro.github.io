@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta name="x-poe-datastore-behavior" content="local_only"><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;"><meta http-equiv="x-dns-prefetch-control" content="off"><script src="https://puc.poecdn.net/authenticated_preview_page/standard.3ef2c256959faf5a756d.js"></script>
     <meta charset="utf-8">
-    <title>Dynamic Variable Analysis</title>
+    <title>Poe</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://puc.poecdn.net/authenticated_preview_page/disableWebRTC.9710cebe07429a9e8e06.js"></script><meta name="x-poe-allow-downloads" content="true"><meta name="x-poe-datastore-behavior" content="disabled"><script src="https://puc.poecdn.net/authenticated_preview_page/tw.b9024aecac666455e183.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/deps.faccd16000d314dc16d5.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/exports.b0f0f482cdeb5302b0b9.js"></script><script src="https://puc.poecdn.net/authenticated_preview_page/renderer.75c73ae6b4235f62945a.js"></script><script>Object.defineProperty(exports, "__esModule", {value: true}); function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }var _react = require('react'); var _react2 = _interopRequireDefault(_react);
 var _lucidereact = require('lucide-react');
@@ -311,6 +311,235 @@ const calculateSystem = (rows, buffs) => {
   });
 
   return { computed, errors };
+};
+
+// Helper to collect all active mods from a buff tree (for comparing preset differences)
+// Returns an object: { "Target:type": { targetVar, type, value, sources: [...] } }
+const collectActiveModsFromBuffs = (buffs) => {
+  const mods = {};
+
+  const applyBuffMods = (buff, namePath) => {
+    if (!buff.isActive) return;
+
+    const buffMultiplier = parseFloat(buff.multiply) || 1;
+
+    (buff.mods || []).forEach(mod => {
+      const key = `${mod.targetVar}:${mod.type}`;
+      const modValue = (parseFloat(mod.value) || 0) * buffMultiplier;
+
+      if (!mods[key]) {
+        mods[key] = { targetVar: mod.targetVar, type: mod.type, value: 0, sources: [] };
+      }
+      mods[key].value += modValue;
+      mods[key].sources.push({ buffName: namePath, value: modValue });
+    });
+
+    (buff.subBuffs || []).forEach(subBuff => {
+      if (subBuff.isActive) {
+        applyBuffMods(subBuff, namePath + ' › ' + subBuff.name);
+      }
+    });
+  };
+
+  buffs.forEach(buff => {
+    if (buff.isActive) {
+      applyBuffMods(buff, buff.name);
+    }
+  });
+
+  return mods;
+};
+
+// Helper to format a number smartly - show decimals only when needed
+const formatNumber = (num) => {
+  if (Number.isInteger(num)) return num.toString();
+  // Show up to 2 decimal places, but trim trailing zeros
+  const fixed = num.toFixed(2);
+  return parseFloat(fixed).toString();
+};
+
+// Helper to calculate mod differences between current and hypothetical buff states
+// Returns an array of { targetVar, type, delta, label } sorted by:
+// 1. Positive changes first, negative changes second
+// 2. Within each group, sorted by the order of targetVar in rows (Calculation Chain order)
+const calculateModDifferences = (currentMods, hypoMods, rows) => {
+  const allKeys = new Set([...Object.keys(currentMods), ...Object.keys(hypoMods)]);
+  const differences = [];
+
+  // Build a map of variable name to its index in rows for sorting
+  const varOrderMap = {};
+  rows.forEach((row, idx) => {
+    if (row.name) {
+      varOrderMap[row.name] = idx;
+    }
+  });
+
+  allKeys.forEach(key => {
+    const current = currentMods[key];
+    const hypo = hypoMods[key];
+    const currentValue = current ? current.value : 0;
+    const hypoValue = hypo ? hypo.value : 0;
+    const delta = hypoValue - currentValue;
+
+    if (Math.abs(delta) > 0.0001) { // Ignore tiny floating point differences
+      const targetVar = current ? current.targetVar : hypo.targetVar;
+      const type = current ? current.type : hypo.type;
+
+      // Format the label based on mod type
+      let label;
+      if (type === 'mult') {
+        // Multiplicative mods shown as percentage
+        const percentDelta = delta * 100;
+        const sign = percentDelta >= 0 ? '+' : '';
+        label = `${targetVar} ${sign}${formatNumber(percentDelta)}%`;
+      } else {
+        // Flat mods shown as raw value
+        const sign = delta >= 0 ? '+' : '';
+        label = `${targetVar} ${sign}${formatNumber(delta)}`;
+      }
+
+      // Get the order index for this variable (use Infinity for unknown vars to put them last)
+      const orderIndex = varOrderMap[targetVar] !== undefined ? varOrderMap[targetVar] : Infinity;
+
+      differences.push({ targetVar, type, delta, label, isPositive: delta > 0, orderIndex });
+    }
+  });
+
+  // Sort: positive first, then by Calculation Chain order within each group
+  differences.sort((a, b) => {
+    // First: positive before negative
+    if (a.isPositive !== b.isPositive) {
+      return a.isPositive ? -1 : 1;
+    }
+    // Second: by order in Calculation Chain
+    return a.orderIndex - b.orderIndex;
+  });
+
+  return differences;
+};
+
+// Find shallowest differences between current buff state and hypothetical state
+// Returns array of difference descriptions like "Healer: Weapon A > Weapon B" or "Weapon A: Mod"
+const findShallowDifferences = (currentBuffs, hypoBuffs) => {
+  const differences = [];
+
+  // First, collect all buff names in the tree to check for uniqueness
+  const nameCount = {};
+  const countNames = (buffList) => {
+    (buffList || []).forEach(buff => {
+      nameCount[buff.name] = (nameCount[buff.name] || 0) + 1;
+      countNames(buff.subBuffs);
+    });
+  };
+  countNames(currentBuffs);
+
+  const isNameUnique = (name) => (nameCount[name] || 0) <= 1;
+
+  const compareBuff = (currBuff, hypoBuff, depth) => {
+    if (!currBuff || !hypoBuff) return;
+
+    // Check if active states differ at this level
+    const activeChanged = currBuff.isActive !== hypoBuff.isActive;
+
+    // Check if multiply values differ
+    const multiplyChanged = currBuff.isActive && hypoBuff.isActive &&
+      (parseFloat(currBuff.multiply) || 1) !== (parseFloat(hypoBuff.multiply) || 1);
+
+    // Check if mods differ (same buff active in both, but different mod values)
+    const modsChanged = currBuff.isActive && hypoBuff.isActive && (() => {
+      const currMods = (currBuff.mods || []).map(m => `${m.targetVar}:${m.type}:${m.value}`).sort().join('|');
+      const hypoMods = (hypoBuff.mods || []).map(m => `${m.targetVar}:${m.type}:${m.value}`).sort().join('|');
+      return currMods !== hypoMods;
+    })();
+
+    // Find which sub-buffs are active in each
+    const currActiveSubBuffs = (currBuff.subBuffs || []).filter(sb => sb.isActive);
+    const hypoActiveSubBuffs = (hypoBuff.subBuffs || []).filter(sb => sb.isActive);
+
+    // Get active sub-buff IDs for comparison
+    const currActiveIds = new Set(currActiveSubBuffs.map(sb => sb.id));
+    const hypoActiveIds = new Set(hypoActiveSubBuffs.map(sb => sb.id));
+
+    // Check if the set of active sub-buffs differs (variant change)
+    const variantChanged = currActiveIds.size !== hypoActiveIds.size ||
+      [...currActiveIds].some(id => !hypoActiveIds.has(id));
+
+    if (variantChanged && currBuff.isActive && hypoBuff.isActive) {
+      // Find what changed: which variants are different
+      const currOnly = currActiveSubBuffs.filter(sb => !hypoActiveIds.has(sb.id));
+      const hypoOnly = hypoActiveSubBuffs.filter(sb => !currActiveIds.has(sb.id));
+
+      if (currOnly.length > 0 || hypoOnly.length > 0) {
+        // Check if all variant names involved are unique
+        const allVariantNames = [...currOnly, ...hypoOnly].map(sb => sb.name);
+        const allUnique = allVariantNames.every(name => isNameUnique(name));
+
+        // Format label based on what changed
+        let label;
+        const prefix = allUnique ? '' : `${currBuff.name}: `;
+
+        if (currOnly.length > 0 && hypoOnly.length === 0) {
+          // Current has buffs that preset doesn't -> removing buffs (show as -buff)
+          label = prefix + currOnly.map(sb => `-${sb.name}`).join(', ');
+        } else if (currOnly.length === 0 && hypoOnly.length > 0) {
+          // Preset has buffs that current doesn't -> adding buffs (show as +buff)
+          label = prefix + hypoOnly.map(sb => `+${sb.name}`).join(', ');
+        } else {
+          // Both have different buffs -> show as swap
+          const currNames = currOnly.map(sb => sb.name).join(', ');
+          const hypoNames = hypoOnly.map(sb => sb.name).join(', ');
+          label = `${prefix}${currNames} → ${hypoNames}`;
+        }
+        differences.push({
+          depth,
+          parentName: currBuff.name,
+          type: 'variant',
+          label
+        });
+      }
+    }
+
+    // Check for mod/multiply changes at this level (only if this buff is active in both)
+    if ((modsChanged || multiplyChanged) && currBuff.isActive && hypoBuff.isActive) {
+      differences.push({
+        depth,
+        parentName: currBuff.name,
+        type: 'mod',
+        label: `${currBuff.name}: Mod`
+      });
+    }
+
+    // Recursively check sub-buffs that are active in BOTH states
+    const currSubBuffMap = new Map((currBuff.subBuffs || []).map(sb => [sb.id, sb]));
+    const hypoSubBuffMap = new Map((hypoBuff.subBuffs || []).map(sb => [sb.id, sb]));
+
+    currSubBuffMap.forEach((currSub, id) => {
+      const hypoSub = hypoSubBuffMap.get(id);
+      if (hypoSub && currSub.isActive && hypoSub.isActive) {
+        // Both have this sub-buff active, check deeper
+        compareBuff(currSub, hypoSub, depth + 1);
+      }
+    });
+  };
+
+  // Compare each top-level buff
+  for (let i = 0; i < currentBuffs.length && i < hypoBuffs.length; i++) {
+    compareBuff(currentBuffs[i], hypoBuffs[i], 0);
+  }
+
+  // Sort by depth (shallowest first), then deduplicate by parent to keep only shallowest
+  differences.sort((a, b) => a.depth - b.depth);
+
+  // Keep only the shallowest difference per parent (to avoid redundant info)
+  const seen = new Set();
+  const filtered = differences.filter(d => {
+    const key = `${d.parentName}:${d.type}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return filtered;
 };
 
 
@@ -891,13 +1120,16 @@ const getInitialState = () => {
           return true;
         };
 
+        // Collect current mods for comparison
+        const currentMods = collectActiveModsFromBuffs(buffs);
+
         const calculatePresetPreviews = (buffList) => {
           buffList.forEach(buff => {
             (buff.presets || []).forEach(preset => {
               const presetKey = `${buff.id}:preset:${preset.id}`;
 
               if (isBuffPresetCurrent(buff, preset)) {
-                newPresetPreviews[presetKey] = { percent: 0, isCurrent: true };
+                newPresetPreviews[presetKey] = { percent: 0, isCurrent: true, modDiffs: [] };
               } else {
                 // Use cloneWithBuffPreset to only affect this buff's descendants
                 const hypoBuffs = cloneWithBuffPreset(buffs, buff.id, preset.activeIds, preset.multiplyValues);
@@ -912,7 +1144,11 @@ const getInitialState = () => {
                   percent = delta > 0 ? 100 : -100;
                 }
 
-                newPresetPreviews[presetKey] = { percent, isCurrent: false };
+                // Calculate mod differences
+                const hypoMods = collectActiveModsFromBuffs(hypoBuffs);
+                const modDiffs = calculateModDifferences(currentMods, hypoMods, rows);
+
+                newPresetPreviews[presetKey] = { percent, isCurrent: false, modDiffs };
               }
             });
 
@@ -930,7 +1166,7 @@ const getInitialState = () => {
           const presetKey = `root:preset:${preset.id}`;
 
           if (isPresetCurrent(preset)) {
-            newPresetPreviews[presetKey] = { percent: 0, isCurrent: true };
+            newPresetPreviews[presetKey] = { percent: 0, isCurrent: true, shallowDiffs: [] };
           } else {
             const hypoBuffs = cloneWithPreset(buffs, preset.activeIds, preset.multiplyValues);
             const hypoResult = calculateSystem(rows, hypoBuffs);
@@ -944,7 +1180,10 @@ const getInitialState = () => {
               percent = delta > 0 ? 100 : -100;
             }
 
-            newPresetPreviews[presetKey] = { percent, isCurrent: false };
+            // Find shallow differences in buff tree
+            const shallowDiffs = findShallowDifferences(buffs, hypoBuffs);
+
+            newPresetPreviews[presetKey] = { percent, isCurrent: false, shallowDiffs };
           }
         });
 
@@ -1110,6 +1349,164 @@ const getInitialState = () => {
     if (editingPreset) {
       discardPresetEdit();
     }
+  };
+
+  // Count how many saved builds have a different configuration for this buff compared to current
+  // Returns the number of builds that would be changed by "Save to All Builds"
+  const countDifferentBuilds = (path) => {
+    const presets = rootBuff.presets || [];
+    if (presets.length === 0) return 0;
+
+    // Get the buff at this path to find all IDs in its tree
+    const getBuffAtPath = (buffs, p) => {
+      let current = buffs[p[0]];
+      for (let i = 1; i < p.length; i++) {
+        current = current.subBuffs[p[i]];
+      }
+      return current;
+    };
+
+    const buff = getBuffAtPath(buffs, path);
+    if (!buff) return 0;
+
+    // Collect descendant IDs only (not the buff itself, since we don't sync the buff's own active state)
+    const collectDescendantIds = (b) => {
+      const ids = [];
+      (b.subBuffs || []).forEach(sb => {
+        ids.push(sb.id);
+        ids.push(...collectDescendantIds(sb));
+      });
+      return ids;
+    };
+    const descendantIds = new Set(collectDescendantIds(buff));
+
+    // If no descendants, no point in syncing
+    if (descendantIds.size === 0) return 0;
+
+    // Get current configuration signature
+    const collectActiveDescendants = (b) => {
+      const ids = [];
+      (b.subBuffs || []).forEach(sb => {
+        if (sb.isActive) ids.push(sb.id);
+        ids.push(...collectActiveDescendants(sb));
+      });
+      return ids;
+    };
+    const collectMultiplyFromDescendants = (b) => {
+      const values = {};
+      (b.subBuffs || []).forEach(sb => {
+        if (sb.isActive && sb.multiply !== undefined && sb.multiply !== 1) {
+          values[sb.id] = sb.multiply;
+        }
+        Object.assign(values, collectMultiplyFromDescendants(sb));
+      });
+      return values;
+    };
+
+    const currentActiveIds = collectActiveDescendants(buff).sort().join(',');
+    const currentMultiplyValues = Object.entries(collectMultiplyFromDescendants(buff))
+      .filter(([id]) => descendantIds.has(id))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, val]) => `${id}:${val}`)
+      .join(',');
+    const currentSignature = `${currentActiveIds}|${currentMultiplyValues}`;
+
+    // Count how many presets differ from current
+    let differentCount = 0;
+    presets.forEach(preset => {
+      // Get active IDs for descendants from the preset
+      const activeInBuff = (preset.activeIds || [])
+        .filter(id => descendantIds.has(id))
+        .sort()
+        .join(',');
+
+      // Get multiply values for descendants from the preset
+      const multiplyInBuff = Object.entries(preset.multiplyValues || {})
+        .filter(([id]) => descendantIds.has(id))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([id, val]) => `${id}:${val}`)
+        .join(',');
+
+      const presetSignature = `${activeInBuff}|${multiplyInBuff}`;
+      if (presetSignature !== currentSignature) {
+        differentCount++;
+      }
+    });
+
+    return differentCount;
+  };
+
+  // Sync a specific buff (and its descendants) state to all saved builds
+  // This updates all root presets to have the same active/multiply state for this buff
+  const syncBuffToAllBuilds = (path) => {
+    // Get the buff at this path
+    const getBuffAtPath = (buffs, path) => {
+      let current = buffs[path[0]];
+      for (let i = 1; i < path.length; i++) {
+        current = current.subBuffs[path[i]];
+      }
+      return current;
+    };
+
+    const buff = getBuffAtPath(buffs, path);
+    if (!buff) return;
+
+    // Collect all IDs in this buff's sub-tree (excluding the buff itself, only descendants)
+    const collectDescendantIds = (b) => {
+      const ids = [];
+      (b.subBuffs || []).forEach(sb => {
+        ids.push(sb.id);
+        ids.push(...collectDescendantIds(sb));
+      });
+      return ids;
+    };
+    const descendantIds = new Set(collectDescendantIds(buff));
+
+    // Collect current active IDs from this buff's descendants (not the buff itself)
+    const collectActiveDescendants = (b) => {
+      const ids = [];
+      (b.subBuffs || []).forEach(sb => {
+        if (sb.isActive) ids.push(sb.id);
+        ids.push(...collectActiveDescendants(sb));
+      });
+      return ids;
+    };
+    const currentActiveIds = new Set(collectActiveDescendants(buff));
+
+    // Collect current multiply values from this buff's descendants (not the buff itself)
+    const collectMultiplyFromDescendants = (b) => {
+      const values = {};
+      (b.subBuffs || []).forEach(sb => {
+        if (sb.isActive && sb.multiply !== undefined && sb.multiply !== 1) {
+          values[sb.id] = sb.multiply;
+        }
+        Object.assign(values, collectMultiplyFromDescendants(sb));
+      });
+      return values;
+    };
+    const currentMultiplyValues = collectMultiplyFromDescendants(buff);
+
+    // Update all root presets
+    setRootBuff(prev => ({
+      ...prev,
+      presets: (prev.presets || []).map(preset => {
+        // Remove all descendant IDs from this buff's tree, then add the current active ones
+        // (We don't touch the buff's own ID - preserving whether the buff itself is enabled/disabled per build)
+        const newActiveIds = (preset.activeIds || []).filter(id => !descendantIds.has(id));
+        currentActiveIds.forEach(id => newActiveIds.push(id));
+
+        // Update multiply values: remove old ones for descendants, add current ones
+        const newMultiplyValues = { ...(preset.multiplyValues || {}) };
+        descendantIds.forEach(id => delete newMultiplyValues[id]);
+        Object.assign(newMultiplyValues, currentMultiplyValues);
+
+        return {
+          ...preset,
+          activeIds: newActiveIds,
+          multiplyValues: newMultiplyValues
+        };
+      })
+    }));
   };
 
   // --- Drag and Drop Handlers for Root Presets ---
@@ -2389,12 +2786,29 @@ const getInitialState = () => {
                                             className: `font-bold bg-transparent outline-none text-xs truncate ${isCurrent ? 'text-slate-800 cursor-text' : 'text-slate-600 cursor-pointer pointer-events-none'}`,
                                             placeholder: "Build Name",
                                         })
-                                        , _react2.default.createElement('div', { className: "flex items-center gap-2 text-[10px] min-w-0"    ,}
-                                            , _react2.default.createElement('span', { className: "text-slate-400 truncate", title: buffPreviewText,}
-                                                , presetActiveIds.length, " · ", buffPreviewText
+                                        , _react2.default.createElement('div', { className: "flex items-center gap-1.5 text-[10px] min-w-0 flex-wrap"    ,}
+                                            /* Show shallow differences for non-current presets */
+                                            , !isCurrent && !isEditing && preview && preview.shallowDiffs && preview.shallowDiffs.length > 0 ? (
+                                                preview.shallowDiffs.map((diff, idx) => (
+                                                    _react2.default.createElement('span', {
+                                                        key: idx,
+                                                        className: `font-medium px-1.5 py-0.5 rounded ${diff.type === 'variant' ? 'text-violet-700 bg-violet-50' : 'text-amber-700 bg-amber-50'}`,}
+                                                        , diff.label
+                                                    )
+                                                ))
+                                            ) : !isCurrent && !isEditing ? (
+                                                _react2.default.createElement('span', { className: "text-slate-400 truncate", title: buffPreviewText,}
+                                                    , presetActiveIds.length, " · ", buffPreviewText
+                                                )
+                                            ) : null
+                                            /* Show buff summary for current/editing presets */
+                                            , (isCurrent || isEditing) && (
+                                                _react2.default.createElement('span', { className: "text-slate-400 truncate", title: buffPreviewText,}
+                                                    , presetActiveIds.length, " · ", buffPreviewText
+                                                )
                                             )
                                             , !isCurrent && preview && preview.percent !== 0 && (
-                                                _react2.default.createElement('span', { className: `flex items-center gap-0.5 font-bold ${preview.percent > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
+                                                _react2.default.createElement('span', { className: `flex items-center gap-0.5 font-bold px-1.5 py-0.5 rounded ${preview.percent > 0 ? 'text-emerald-700 bg-emerald-100' : 'text-red-600 bg-red-100'}`,}
                                                     , preview.percent > 0 ? '+' : ''
                                                     , preview.percent.toFixed(1), "%"
                                                 )
@@ -2658,7 +3072,7 @@ const getInitialState = () => {
                         , !isCurrentPreset && presetPreview && presetPreview.percent !== 0 && _react2.default.createElement('span', {
                             className: `text-[10px] font-bold ${presetPreview.percent > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
                           , presetPreview.percent > 0 ? '+' : ''
-                          , presetPreview.percent.toFixed(0)
+                          , presetPreview.percent.toFixed(1)
                           , '%'
                         )
                         , _react2.default.createElement('button', {
@@ -2741,7 +3155,7 @@ const getInitialState = () => {
                         )
                       ))
                     )
-                    /* Add Mod, Add Variant, Add Preset Buttons */
+                    /* Add Mod, Add Variant, Add Preset, Sync to All Builds Buttons */
                     , _react2.default.createElement('div', { className: "flex items-center gap-3 flex-wrap",}
                       , _react2.default.createElement('button', {
                         onClick: () => addModToBuff(path),
@@ -2758,6 +3172,21 @@ const getInitialState = () => {
                         className: "text-xs text-violet-600 hover:text-violet-700 font-medium flex items-center gap-1",}
                         , _react2.default.createElement(_lucidereact.Bookmark, { size: 12,}), "Save As Preset"
                       )
+                      , (rootBuff.presets || []).length > 0 && (() => {
+                        const differentCount = countDifferentBuilds(path);
+                        if (differentCount <= 0) return null;
+                        return _react2.default.createElement('button', {
+                          onClick: () => syncBuffToAllBuilds(path),
+                          className: "text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1",
+                          title: `Apply this buff's current state to ${differentCount} build${differentCount !== 1 ? 's' : ''} that differ from current configuration`,}
+                          , _react2.default.createElement(_lucidereact.Save, { size: 12,})
+                          , "Save to All Builds"
+                          , _react2.default.createElement('span', {
+                              className: "ml-0.5 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold",}
+                            , differentCount
+                          )
+                        );
+                      })()
                     )
 
                     /* Presets Row - horizontal list (when not collapsed) */
@@ -2809,7 +3238,7 @@ const getInitialState = () => {
                           , !isCurrentPreset && presetPreview && presetPreview.percent !== 0 && _react2.default.createElement('span', {
                               className: `text-[10px] font-bold ${presetPreview.percent > 0 ? 'text-emerald-600' : 'text-red-500'}`,}
                             , presetPreview.percent > 0 ? '+' : ''
-                            , presetPreview.percent.toFixed(0)
+                            , presetPreview.percent.toFixed(1)
                             , '%'
                           )
                           , _react2.default.createElement('button', {
@@ -2979,7 +3408,6 @@ input[type="number"] {
   
 
 <div id="preview-app"></div></body></html>
-
 
 
 
